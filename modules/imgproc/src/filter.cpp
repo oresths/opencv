@@ -42,6 +42,7 @@
 
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
+//#include <time.h>
 
 /****************************************************************************************\
                                     Base Image Filter
@@ -358,8 +359,16 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
                 }
             }
 
-            if( isSep )
+            if( isSep ) {
+                double exec_time, startss;
+                if (startY==1) exec_time=0;
+                startss = (double)getTickCount();
                 (*rowFilter)(row, brow, width, CV_MAT_CN(srcType));
+                exec_time += (double)getTickCount() -startss;
+                if (startY==2796) {
+                    printf("rowfilter time = %f ms\n", exec_time*1000./getTickFrequency());
+                }
+            }
         }
 
         int max_i = std::min(bufRows, roi.height - (dstY + dy) + (kheight - 1));
@@ -381,8 +390,18 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
         if( i < kheight )
             break;
         i -= kheight - 1;
-        if( isSeparable() )
+        double exec_timec, startssc;
+        if( isSeparable() ){
+            if (startY==1) exec_timec=0;
+            startssc = (double)getTickCount();
             (*columnFilter)((const uchar**)brows, dst, dststep, i, roi.width*cn);
+            exec_timec += (double)getTickCount() -startssc;
+            if (startY==2796) {
+                printf("columnfilter time = %f ms\n", exec_timec*1000./getTickFrequency());
+            }
+        }
+//        if( isSeparable() )
+//            (*columnFilter)((const uchar**)brows, dst, dststep, i, roi.width*cn);
         else
             (*filter2D)((const uchar**)brows, dst, dststep, i, roi.width, cn);
     }
@@ -2205,6 +2224,198 @@ struct FilterVec_32f
     std::vector<uchar> coeffs;
     float delta;
 };
+
+
+#elif CV_NEON
+
+struct SymmRowSmallVec_8u32s
+{
+    SymmRowSmallVec_8u32s() { smallValues = false; }
+    SymmRowSmallVec_8u32s( const Mat& _kernel, int _symmetryType )
+    {
+        kernel = _kernel;
+        symmetryType = _symmetryType;
+        smallValues = true;
+        int k, ksize = kernel.rows + kernel.cols - 1;
+        for( k = 0; k < ksize; k++ )
+        {
+            int v = kernel.ptr<int>()[k];
+            if( v < SHRT_MIN || v > SHRT_MAX )
+            {
+                smallValues = false;
+                break;
+            }
+        }
+    }
+
+    int operator()(const uchar* src, uchar* _dst, int width, int cn) const
+    {
+        //Uncomment the two following lines when runtime support for neon is implemented.
+        // if( !checkHardwareSupport(CV_CPU_NEON) )
+        //
+
+        int i = 0, _ksize = kernel.rows + kernel.cols - 1;
+        int* dst = (int*)_dst;
+        bool symmetrical = (symmetryType & KERNEL_SYMMETRICAL) != 0;
+        const int* kx = kernel.ptr<int>() + _ksize/2;
+        if( !smallValues )
+            return 0;
+
+        src += (_ksize/2)*cn;
+        width *= cn;
+
+        if( symmetrical )
+        {
+            if( _ksize == 1 )
+                return 0;
+            if( _ksize == 3 )
+            {
+                if( kx[0] == 2 && kx[1] == 1 )
+                {
+                    uint16x8_t zq = vdupq_n_u16(0);
+
+                    for( ; i <= width - 8; i += 8, src += 8 )
+                    {
+                        uint8x8_t x0, x1, x2;
+                        x0 = vld1_u8( (uint8_t *) (src - cn) );
+                        x1 = vld1_u8( (uint8_t *) (src) );
+                        x2 = vld1_u8( (uint8_t *) (src + cn) );
+
+                        uint16x8_t y0, y1, y2;
+                        y0 = vaddl_u8(x0, x2);
+                        y1 = vshll_n_u8(x1, 1);
+                        y2 = vaddq_u16(y0, y1);
+
+                        uint16x8x2_t str;
+                        str.val[0] = y2; str.val[1] = zq;
+                        vst2q_u16( (uint16_t *) (dst + i), str );
+                    }
+                }
+                else if( kx[0] == -2 && kx[1] == 1 )
+                    return 0;
+                else
+                {
+                    int32x4_t k32 = vdupq_n_s32(0);
+                    k32 = vld1q_lane_s32(kx, k32, 0);
+                    k32 = vld1q_lane_s32(kx + 1, k32, 1);
+
+                    int16x4_t k = vqmovn_s32(k32);
+
+                    uint8x8_t z = vdup_n_u8(0);
+
+                    int32x4_t accl = vdupq_n_s32(0), acch = vdupq_n_s32(0);
+
+                    for( ; i <= width - 8; i += 8, src += 8 )
+                    {
+                        accl = acch = vdupq_n_s32(0);
+
+                        uint8x8_t x0, x1, x2;
+                        x0 = vld1_u8( (const uint8_t *) &(src[- cn]) );
+                        x1 = vld1_u8( (const uint8_t *) &(src[0]) );
+                        x2 = vld1_u8( (const uint8_t *) &(src[ cn]) );
+
+                        int16x8_t y0, y1;
+                        y0 = vreinterpretq_s16_u16(vaddl_u8(x1, z));
+
+                        accl = vmlal_lane_s16(accl, vget_low_s16(y0), k, 0);
+                        acch = vmlal_lane_s16(acch, vget_high_s16(y0), k, 0);
+                        y1 = vreinterpretq_s16_u16(vaddl_u8(x0, x2));
+                        accl = vmlal_lane_s16(accl, vget_low_s16(y1), k, 1);
+
+                        acch = vmlal_lane_s16(acch, vget_high_s16(y1), k, 1);
+
+                        vst1q_s32((int32_t *)(dst + i), accl);
+                        vst1q_s32((int32_t *)(dst + i + 4), acch);
+                    }
+
+                }
+            }
+            else if( _ksize == 5 )
+            {
+                if( kx[0] == -2 && kx[1] == 0 && kx[2] == 1 )
+                    return 0;
+                else
+                {
+                    return 0;
+                }
+            }
+        }
+        else
+        {
+            if( _ksize == 3 )
+            {
+                if( kx[0] == 0 && kx[1] == 1 )
+                {
+                    uint8x8_t z = vdup_n_u8(0);
+
+                    for( ; i <= width - 8; i += 8, src += 8 )
+                    {
+                        uint8x8_t x0, x1;
+                        x0 = vld1_u8( (uint8_t *) (src - cn) );
+                        x1 = vld1_u8( (uint8_t *) (src + cn) );
+
+                        int16x8_t y0;
+                        y0 = vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(x1, z)),
+                                vreinterpretq_s16_u16(vaddl_u8(x0, z)));
+
+                        vst1q_s32((int32_t *)(dst + i), vmovl_s16(vget_low_s16(y0)));
+                        vst1q_s32((int32_t *)(dst + i + 4), vmovl_s16(vget_high_s16(y0)));
+                    }
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            else if( _ksize == 5 )
+            {
+                return 0;
+            }
+        }
+
+        // src -= (_ksize/2)*cn;
+        // kx -= _ksize/2;
+        // for( ; i <= width - 4; i += 4, src += 4 )
+        // {
+        //     __m128i f, s0 = z, x0, x1;
+
+        //     for( k = j = 0; k < _ksize; k++, j += cn )
+        //     {
+        //         f = _mm_cvtsi32_si128(kx[k]);
+        //         f = _mm_shuffle_epi32(f, 0);
+        //         f = _mm_packs_epi32(f, f);
+
+        //         x0 = _mm_cvtsi32_si128(*(const int*)(src + j));
+        //         x0 = _mm_unpacklo_epi8(x0, z);
+        //         x1 = _mm_mulhi_epi16(x0, f);
+        //         x0 = _mm_mullo_epi16(x0, f);
+        //         s0 = _mm_add_epi32(s0, _mm_unpacklo_epi16(x0, x1));
+        //     }
+        //     _mm_store_si128((__m128i*)(dst + i), s0);
+        // }
+
+        return i;
+    }
+
+    Mat kernel;
+    int symmetryType;
+    bool smallValues;
+};
+
+
+typedef RowNoVec RowVec_8u32s;
+typedef RowNoVec RowVec_16s32f;
+typedef RowNoVec RowVec_32f;
+//typedef SymmRowSmallNoVec SymmRowSmallVec_8u32s;
+typedef SymmRowSmallNoVec SymmRowSmallVec_32f;
+typedef ColumnNoVec SymmColumnVec_32s8u;
+typedef ColumnNoVec SymmColumnVec_32f16s;
+typedef ColumnNoVec SymmColumnVec_32f;
+typedef SymmColumnSmallNoVec SymmColumnSmallVec_32s16s;
+typedef SymmColumnSmallNoVec SymmColumnSmallVec_32f;
+typedef FilterNoVec FilterVec_8u;
+typedef FilterNoVec FilterVec_8u16s;
+typedef FilterNoVec FilterVec_32f;
 
 
 #else
