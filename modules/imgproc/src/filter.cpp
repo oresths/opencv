@@ -365,7 +365,7 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
                 startss = (double)getTickCount();
                 (*rowFilter)(row, brow, width, CV_MAT_CN(srcType));
                 exec_time += (double)getTickCount() -startss;
-                if (startY==2796) {
+                if (startY==(wholeSize.height - rowCount)) {
                     printf("rowfilter time = %f ms\n", exec_time*1000./getTickFrequency());
                 }
             }
@@ -396,7 +396,7 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
             startssc = (double)getTickCount();
             (*columnFilter)((const uchar**)brows, dst, dststep, i, roi.width*cn);
             exec_timec += (double)getTickCount() -startssc;
-            if (startY==2796) {
+            if (startY==(wholeSize.height - rowCount) && dy==2800) {
                 printf("columnfilter time = %f ms\n", exec_timec*1000./getTickFrequency());
             }
         }
@@ -2295,6 +2295,7 @@ struct SymmRowSmallVec_8u32s
                     return 0;
                 else
                 {
+//                    return 0;
                     int32x4_t k32 = vdupq_n_s32(0);
                     k32 = vld1q_lane_s32(kx, k32, 0);
                     k32 = vld1q_lane_s32(kx + 1, k32, 1);
@@ -2332,7 +2333,47 @@ struct SymmRowSmallVec_8u32s
                     return 0;
                 else
                 {
-                    return 0;
+//                    return 0;
+                    int32x4_t k32 = vdupq_n_s32(0);
+                    k32 = vld1q_lane_s32(kx, k32, 0);
+                    k32 = vld1q_lane_s32(kx + 1, k32, 1);
+                    k32 = vld1q_lane_s32(kx + 2, k32, 2);
+
+                    int16x4_t k = vqmovn_s32(k32);
+
+                    uint8x8_t z = vdup_n_u8(0);
+
+                    for( ; i <= width - 8; i += 8, src += 8 )
+                    {
+                        uint8x8_t x0, x1, x2, x3, x4;
+                        x0 = vld1_u8( (uint8_t *) (src - cn) );
+                        x1 = vld1_u8( (uint8_t *) (src) );
+                        x2 = vld1_u8( (uint8_t *) (src + cn) );
+
+                        int16x8_t y0, y1;
+                        int32x4_t y2, y3, y4, y5, y6, y7;
+                        y0 = vreinterpretq_s16_u16(vaddl_u8(x1, z));
+                        y1 = vreinterpretq_s16_u16(vaddl_u8(x0, x2));
+                        y2 = vmull_lane_s16(vget_low_s16(y0), k, 0);
+                        y3 = vmull_lane_s16(vget_low_s16(y1), k, 1);
+                        y4 = vmull_lane_s16(vget_high_s16(y0), k, 0);
+                        y5 = vmull_lane_s16(vget_high_s16(y1), k, 1);
+                        y6 = vaddq_s32(y2, y3);
+                        y7 = vaddq_s32(y4, y5);
+
+                        int16x8_t y8;
+                        int32x4_t y9, y10, y11, y12;
+                        x3 = vld1_u8( (uint8_t *) (src - cn*2) );
+                        x4 = vld1_u8( (uint8_t *) (src + cn*2) );
+                        y8 = vreinterpretq_s16_u16(vaddl_u8(x3, x4));
+                        y9 = vmull_lane_s16(vget_low_s16(y8), k, 2);
+                        y10 = vmull_lane_s16(vget_high_s16(y8), k, 2);
+                        y11 = vaddq_s32(y9, y6);
+                        y12 = vaddq_s32(y10, y7);
+
+                        vst1q_s32((int32_t *)(dst + i), y11);
+                        vst1q_s32((int32_t *)(dst + i + 4), y12);
+                    }
                 }
             }
         }
@@ -2431,6 +2472,7 @@ struct SymmColumnSmallVec_32s16s
         {
             if( ky[0] == 2 && ky[1] == 1 )
             {
+//                return 0;
                 for( ; i <= width - 4; i += 4 )
                 {
                     int32x4_t x0, x1, x2;
@@ -2440,7 +2482,7 @@ struct SymmColumnSmallVec_32s16s
 
                     int32x4_t y0, y1, y2, y3;
                     y0 = vaddq_s32(x0, x2);
-                    y1 = vqshlq_n_s32(x1, 2);
+                    y1 = vqshlq_n_s32(x1, 1);
                     y2 = vaddq_s32(y0, y1);
                     y3 = vaddq_s32(y2, d4);
 
@@ -2452,7 +2494,25 @@ struct SymmColumnSmallVec_32s16s
             }
             else if( ky[0] == -2 && ky[1] == 1 )
             {
-                return 0;
+//                return 0;
+                for( ; i <= width - 4; i += 4 )
+                {
+                    int32x4_t x0, x1, x2;
+                    x0 = vld1q_s32((int32_t const *)(S0 + i));
+                    x1 = vld1q_s32((int32_t const *)(S1 + i));
+                    x2 = vld1q_s32((int32_t const *)(S2 + i));
+
+                    int32x4_t y0, y1, y2, y3;
+                    y0 = vaddq_s32(x0, x2);
+                    y1 = vqshlq_n_s32(x1, 1);
+                    y2 = vsubq_s32(y0, y1);
+                    y3 = vaddq_s32(y2, d4);
+
+                    int16x4_t t;
+                    t = vqmovn_s32(y3);
+
+                    vst1_s16((int16_t *)(dst + i), t);
+                }
             }
             else if( ky[0] == 10 && ky[1] == 3 )
             {
@@ -2480,6 +2540,7 @@ struct SymmColumnSmallVec_32s16s
             }
             else
             {
+//                return 0;
                 float32x2_t k32 = vdup_n_f32(0);
                 k32 = vld1_lane_f32(ky, k32, 0);
                 k32 = vld1_lane_f32(ky + 1, k32, 1);
