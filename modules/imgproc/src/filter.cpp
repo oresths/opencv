@@ -2428,7 +2428,46 @@ struct SymmRowSmallVec_8u32s
             }
             else if( _ksize == 5 )
             {
-                return 0;
+//                return 0;
+                int32x4_t k32 = vdupq_n_s32(0);
+                k32 = vld1q_lane_s32(kx + 1, k32, 1);
+                k32 = vld1q_lane_s32(kx + 2, k32, 2);
+
+                int16x4_t k = vqmovn_s32(k32);
+
+                uint8x8_t z = vdup_n_u8(0);
+
+                for( ; i <= width - 8; i += 8, src += 8 )
+                {
+                    uint8x8_t x0, x1;
+                    x0 = vld1_u8( (uint8_t *) (src - cn) );
+                    x1 = vld1_u8( (uint8_t *) (src + cn) );
+
+                    int16x8_t y0;
+                    int32x4_t y1, y2;
+                    y0 = vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(x1, z)),
+                        vreinterpretq_s16_u16(vaddl_u8(x0, z)));
+                    y1 = vmull_lane_s16(vget_low_s16(y0), k, 1);
+                    y2 = vmull_lane_s16(vget_high_s16(y0), k, 1);
+
+                    uint8x8_t x2, x3;
+                    x2 = vld1_u8( (uint8_t *) (src - cn*2) );
+                    x3 = vld1_u8( (uint8_t *) (src + cn*2) );
+
+                    int16x8_t y3;
+                    int32x4_t y4, y5;
+                    y3 = vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(x3, z)),
+                        vreinterpretq_s16_u16(vaddl_u8(x2, z)));
+                    y4 = vmull_lane_s16(vget_low_s16(y3), k, 2);
+                    y5 = vmull_lane_s16(vget_high_s16(y3), k, 2);
+
+                    int32x4_t y6, y7;
+                    y6 = vaddq_s32(y1, y4);
+                    y7 = vaddq_s32(y2, y5);
+
+                    vst1q_s32((int32_t *)(dst + i), y6);
+                    vst1q_s32((int32_t *)(dst + i + 4), y7);
+                }
             }
         }
 
@@ -2630,12 +2669,232 @@ struct SymmColumnSmallVec_32s16s
 };
 
 
+struct SymmColumnVec_32f16s
+{
+    SymmColumnVec_32f16s() { symmetryType=0; }
+    SymmColumnVec_32f16s(const Mat& _kernel, int _symmetryType, int, double _delta)
+    {
+        symmetryType = _symmetryType;
+        kernel = _kernel;
+        delta = (float)_delta;
+        CV_Assert( (symmetryType & (KERNEL_SYMMETRICAL | KERNEL_ASYMMETRICAL)) != 0 );
+        //Uncomment the following line when runtime support for neon is implemented.
+        // neon_supported = checkHardwareSupport(CV_CPU_NEON);
+    }
+
+    int operator()(const uchar** _src, uchar* _dst, int width) const
+    {
+        //Uncomment the two following lines when runtime support for neon is implemented.
+        // if( !neon_supported )
+        //     return 0;
+
+        int _ksize = kernel.rows + kernel.cols - 1;
+        int ksize2 = _ksize / 2;
+        const float* ky = kernel.ptr<float>() + ksize2;
+        int i = 0, k;
+        bool symmetrical = (symmetryType & KERNEL_SYMMETRICAL) != 0;
+        const float** src = (const float**)_src;
+        const float *S, *S2;
+        short* dst = (short*)_dst;
+
+        float32x4_t d4 = vdupq_n_f32(delta);
+
+        if( symmetrical )
+        {
+            if( _ksize == 1 )
+                return 0;
+
+//            return 0;
+            float32x4_t accl, acch;
+            accl = vdupq_n_f32(0);
+            acch = vdupq_n_f32(0);
+
+            float32x2_t k32;
+            k32 = vdup_n_f32(0);
+            k32 = vld1_lane_f32(ky, k32, 0);
+            k32 = vld1_lane_f32(ky + 1, k32, 1);
+
+            for( ; i <= width - 8; i += 8 )
+            {
+                float32x4_t x0l, x0h, x1l, x1h, x2l, x2h;
+
+                S = src[0] + i;
+
+                x0l = vld1q_f32(S);
+                x0h = vld1q_f32(S + 4);
+
+                S = src[1] + i;
+                S2 = src[-1] + i;
+
+                x1l = vld1q_f32(S);
+                x1h = vld1q_f32(S + 4);
+                x2l = vld1q_f32(S2);
+                x2h = vld1q_f32(S2 + 4);
+
+                accl = vmlaq_lane_f32(d4, x0l, k32, 0);
+                acch = vmlaq_lane_f32(d4, x0h, k32, 0);
+                accl = vmlaq_lane_f32(accl, vaddq_f32(x1l, x2l), k32, 1);
+                acch = vmlaq_lane_f32(acch, vaddq_f32(x1h, x2h), k32, 1);
+
+                for( k = 2; k <= ksize2; k++ )
+                {
+                    S = src[k] + i;
+                    S2 = src[-k] + i;
+
+                    float32x4_t x3l, x3h, x4l, x4h;
+                    x3l = vld1q_f32(S);
+                    x3h = vld1q_f32(S + 4);
+                    x4l = vld1q_f32(S2);
+                    x4h = vld1q_f32(S2 + 4);
+
+                    accl = vmlaq_n_f32(accl, vaddq_f32(x3l, x4l), ky[k]);
+                    acch = vmlaq_n_f32(acch, vaddq_f32(x3h, x4h), ky[k]);
+                }
+
+                int32x4_t s32l, s32h;
+                s32l = vcvtq_s32_f32(accl);
+                s32h = vcvtq_s32_f32(acch);
+
+                int16x4_t s16l, s16h;
+                s16l = vqmovn_s32(s32l);
+                s16h = vqmovn_s32(s32h);
+
+                vst1_s16((int16_t *)(dst + i), s16l);
+                vst1_s16((int16_t *)(dst + i + 4), s16h);
+            }
+        }
+        else
+        {
+            return 0;
+        }
+
+        return i;
+    }
+
+    int symmetryType;
+    float delta;
+    Mat kernel;
+    bool neon_supported;
+};
+
+
+struct SymmRowSmallVec_32f
+{
+    SymmRowSmallVec_32f() {}
+    SymmRowSmallVec_32f( const Mat& _kernel, int _symmetryType )
+    {
+        kernel = _kernel;
+        symmetryType = _symmetryType;
+    }
+
+    int operator()(const uchar* _src, uchar* _dst, int width, int cn) const
+    {
+        //Uncomment the two following lines when runtime support for neon is implemented.
+        // if( !checkHardwareSupport(CV_CPU_NEON) )
+        //     return 0;
+
+        int i = 0, _ksize = kernel.rows + kernel.cols - 1;
+        float* dst = (float*)_dst;
+        const float* src = (const float*)_src + (_ksize/2)*cn;
+        bool symmetrical = (symmetryType & KERNEL_SYMMETRICAL) != 0;
+        const float* kx = kernel.ptr<float>() + _ksize/2;
+        width *= cn;
+
+        if( symmetrical )
+        {
+            if( _ksize == 1 )
+                return 0;
+            if( _ksize == 3 )
+            {
+                if( kx[0] == 2 && kx[1] == 1 )
+                    return 0;
+                else if( kx[0] == -2 && kx[1] == 1 )
+                    return 0;
+                else
+                {
+                    return 0;
+                }
+            }
+            else if( _ksize == 5 )
+            {
+                if( kx[0] == -2 && kx[1] == 0 && kx[2] == 1 )
+                    return 0;
+                else
+                {
+//                    return 0;
+                    float32x2_t k0, k1;
+                    k0 = k1 = vdup_n_f32(0);
+                    k0 = vld1_lane_f32(kx + 0, k0, 0);
+                    k0 = vld1_lane_f32(kx + 1, k0, 1);
+                    k1 = vld1_lane_f32(kx + 2, k1, 0);
+
+                    for( ; i <= width - 4; i += 4, src += 4 )
+                    {
+                        float32x4_t x0, x1, x2, x3, x4;
+                        x0 = vld1q_f32(src);
+                        x1 = vld1q_f32(src - cn);
+                        x2 = vld1q_f32(src + cn);
+                        x3 = vld1q_f32(src - cn*2);
+                        x4 = vld1q_f32(src + cn*2);
+
+                        float32x4_t y0;
+                        y0 = vmulq_lane_f32(x0, k0, 0);
+                        y0 = vmlaq_lane_f32(y0, vaddq_f32(x1, x2), k0, 1);
+                        y0 = vmlaq_lane_f32(y0, vaddq_f32(x3, x4), k1, 0);
+
+                        vst1q_f32(dst + i, y0);
+                    }
+                }
+            }
+        }
+        else
+        {
+            if( _ksize == 3 )
+            {
+                if( kx[0] == 0 && kx[1] == 1 )
+                    return 0;
+                else
+                {
+                    return 0;
+                }
+            }
+            else if( _ksize == 5 )
+            {
+//                return 0;
+                float32x2_t k;
+                k = vdup_n_f32(0);
+                k = vld1_lane_f32(kx + 1, k, 0);
+                k = vld1_lane_f32(kx + 2, k, 1);
+
+                for( ; i <= width - 4; i += 4, src += 4 )
+                {
+                    float32x4_t x0, x1, x2, x3;
+                    x0 = vld1q_f32(src - cn);
+                    x1 = vld1q_f32(src + cn);
+                    x2 = vld1q_f32(src - cn*2);
+                    x3 = vld1q_f32(src + cn*2);
+
+                    float32x4_t y0;
+                    y0 = vmulq_lane_f32(vsubq_f32(x1, x0), k, 0);
+                    y0 = vmlaq_lane_f32(y0, vsubq_f32(x3, x2), k, 1);
+
+                    vst1q_f32(dst + i, y0);
+                }
+            }
+        }
+
+        return i;
+    }
+
+    Mat kernel;
+    int symmetryType;
+};
+
+
 typedef RowNoVec RowVec_8u32s;
 typedef RowNoVec RowVec_16s32f;
 typedef RowNoVec RowVec_32f;
-typedef SymmRowSmallNoVec SymmRowSmallVec_32f;
 typedef ColumnNoVec SymmColumnVec_32s8u;
-typedef ColumnNoVec SymmColumnVec_32f16s;
 typedef ColumnNoVec SymmColumnVec_32f;
 typedef SymmColumnSmallNoVec SymmColumnSmallVec_32f;
 typedef FilterNoVec FilterVec_8u;
@@ -3412,6 +3671,7 @@ cv::Ptr<cv::FilterEngine> cv::createSeparableLinearFilter(
           ddepth == CV_16S)) )
     {
         bdepth = CV_32S;
+//        bits = 8;
         bits = ddepth == CV_8U ? 8 : 0;
         _rowKernel.convertTo( rowKernel, CV_32S, 1 << bits );
         _columnKernel.convertTo( columnKernel, CV_32S, 1 << bits );
