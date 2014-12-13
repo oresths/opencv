@@ -47,7 +47,8 @@ enum
     KERNEL_SYMMETRICAL  = 1, // kernel[i] == kernel[ksize-i-1] , and the anchor is at the center
     KERNEL_ASYMMETRICAL = 2, // kernel[i] == -kernel[ksize-i-1] , and the anchor is at the center
     KERNEL_SMOOTH       = 4, // all the kernel elements are non-negative and summed to 1
-    KERNEL_INTEGER      = 8  // all the kernel coefficients are integer numbers
+    KERNEL_INTEGER      = 8, // all the kernel coefficients are integer numbers
+    KERNEL_SMALL        = 16 // all the kernel coefficients are in the closed interval [-128, 127]
 };
 
 /*!

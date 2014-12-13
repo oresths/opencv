@@ -454,7 +454,7 @@ int cv::getKernelType(InputArray filter_kernel, Point anchor)
 
     const double* coeffs = kernel.ptr<double>();
     double sum = 0;
-    int type = KERNEL_SMOOTH + KERNEL_INTEGER;
+    int type = KERNEL_SMOOTH + KERNEL_INTEGER + KERNEL_SMALL;
     if( (_kernel.rows == 1 || _kernel.cols == 1) &&
         anchor.x*2 + 1 == _kernel.cols &&
         anchor.y*2 + 1 == _kernel.rows )
@@ -471,6 +471,8 @@ int cv::getKernelType(InputArray filter_kernel, Point anchor)
             type &= ~KERNEL_SMOOTH;
         if( a != saturate_cast<int>(a) )
             type &= ~KERNEL_INTEGER;
+        if ( a < -128 || a > 127 )
+            type &= ~KERNEL_SMALL;
         sum += a;
     }
 
@@ -3603,6 +3605,16 @@ cv::Ptr<cv::BaseColumnFilter> cv::getLinearColumnFilter( int bufType, int dstTyp
     else
     {
         int ksize = kernel.rows + kernel.cols - 1;
+
+#if CV_NEON
+        if( ksize <= 5 )
+        {
+            if( ddepth == CV_16S && sdepth == CV_32S )
+                return makePtr<SymmColumnSmallFilter<Cast<int, short>,
+                    SymmColumnSmallVec_32s16s> >(kernel, anchor, delta, symmetryType,
+                        Cast<int, short>(), SymmColumnSmallVec_32s16s(kernel, symmetryType, bits, delta));
+        }
+#endif
         if( ksize == 3 )
         {
             if( ddepth == CV_8U && sdepth == CV_32S )
@@ -3610,10 +3622,11 @@ cv::Ptr<cv::BaseColumnFilter> cv::getLinearColumnFilter( int bufType, int dstTyp
                     FixedPtCastEx<int, uchar>, SymmColumnVec_32s8u> >
                     (kernel, anchor, delta, symmetryType, FixedPtCastEx<int, uchar>(bits),
                     SymmColumnVec_32s8u(kernel, symmetryType, bits, delta));
-            if( ddepth == CV_16S && sdepth == CV_32S && bits == 0 )
-                return makePtr<SymmColumnSmallFilter<Cast<int, short>,
-                    SymmColumnSmallVec_32s16s> >(kernel, anchor, delta, symmetryType,
-                        Cast<int, short>(), SymmColumnSmallVec_32s16s(kernel, symmetryType, bits, delta));
+            if( ddepth == CV_16S && sdepth == CV_32S )
+                return makePtr<SymmColumnSmallFilter<
+                    FixedPtCastEx<int, short>, SymmColumnSmallVec_32s16s> >
+                    (kernel, anchor, delta, symmetryType, FixedPtCastEx<int, short>(bits),
+                    SymmColumnSmallVec_32s16s(kernel, symmetryType, bits, delta));
             if( ddepth == CV_32F && sdepth == CV_32F )
                 return makePtr<SymmColumnSmallFilter<
                     Cast<float, float>,SymmColumnSmallVec_32f> >
@@ -3637,8 +3650,8 @@ cv::Ptr<cv::BaseColumnFilter> cv::getLinearColumnFilter( int bufType, int dstTyp
             return makePtr<SymmColumnFilter<Cast<double, ushort>, ColumnNoVec> >
                 (kernel, anchor, delta, symmetryType);
         if( ddepth == CV_16S && sdepth == CV_32S )
-            return makePtr<SymmColumnFilter<Cast<int, short>, ColumnNoVec> >
-                (kernel, anchor, delta, symmetryType);
+            return makePtr<SymmColumnFilter<FixedPtCastEx<int, short>, ColumnNoVec> >
+                (kernel, anchor, delta, symmetryType, FixedPtCastEx<int, short>(bits));
         if( ddepth == CV_16S && sdepth == CV_32F )
             return makePtr<SymmColumnFilter<Cast<float, short>, SymmColumnVec_32f16s> >
                  (kernel, anchor, delta, symmetryType, Cast<float, short>(),
@@ -3697,12 +3710,13 @@ cv::Ptr<cv::FilterEngine> cv::createSeparableLinearFilter(
           ddepth == CV_8U) ||
          ((rtype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
           (ctype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
-          (rtype & ctype & KERNEL_INTEGER) &&
+          (rtype & ctype & (KERNEL_INTEGER+KERNEL_SMALL)) &&
           ddepth == CV_16S)) )
     {
         bdepth = CV_32S;
-//        bits = 8;
-        bits = ddepth == CV_8U ? 8 : 0;
+        if( ddepth == CV_8U ||
+             ((rtype & ctype & KERNEL_SMALL) && !((rtype | ctype) & KERNEL_INTEGER)) )
+            bits = 8;
         _rowKernel.convertTo( rowKernel, CV_32S, 1 << bits );
         _columnKernel.convertTo( columnKernel, CV_32S, 1 << bits );
         bits *= 2;
