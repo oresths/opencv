@@ -313,6 +313,8 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
     bool makeBorder = (_dx1 > 0 || _dx2 > 0) && rowBorderType != BORDER_CONSTANT;
     int dy = 0, i = 0;
 
+    double exec_time=0, exec_timec=0;
+
     src -= xofs1*esz;
     count = std::min(count, remainingInputRows());
 
@@ -360,7 +362,7 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
             }
 
             if( isSep ) {
-                double exec_time=0, startss;
+                double startss;
                 if (startY==1) exec_time=0;
                 startss = (double)getTickCount();
                 (*rowFilter)(row, brow, width, CV_MAT_CN(srcType));
@@ -390,7 +392,7 @@ int FilterEngine::proceed( const uchar* src, int srcstep, int count,
         if( i < kheight )
             break;
         i -= kheight - 1;
-        double exec_timec=0, startssc;
+        double startssc;
         if( isSeparable() ){
             if (startY==1) exec_timec=0;
             startssc = (double)getTickCount();
