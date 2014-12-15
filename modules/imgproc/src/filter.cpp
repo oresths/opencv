@@ -3905,7 +3905,7 @@ cv::Ptr<cv::FilterEngine> cv::createSeparableLinearFilter(
     int bits = 0;
 
     if( sdepth == CV_8U &&
-        ((rtype & ctype & (KERNEL_SMOOTH+KERNEL_SYMMETRICAL) == KERNEL_SMOOTH+KERNEL_SYMMETRICAL &&
+        (((rtype & ctype & (KERNEL_SMOOTH+KERNEL_SYMMETRICAL)) == KERNEL_SMOOTH+KERNEL_SYMMETRICAL &&
           ddepth == CV_8U) ||
          ((rtype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
           (ctype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
