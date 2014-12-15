@@ -3806,15 +3806,6 @@ cv::Ptr<cv::BaseColumnFilter> cv::getLinearColumnFilter( int bufType, int dstTyp
     {
         int ksize = kernel.rows + kernel.cols - 1;
 
-#if CV_NEON
-        if( ksize == 5 )
-        {
-            if( ddepth == CV_16S && sdepth == CV_32S )
-                return makePtr<SymmColumnFilter<FixedPtCastEx<int, short>,
-                    SymmColumnSmallVec_32s16s> >(kernel, anchor, delta, symmetryType,
-                    FixedPtCastEx<int, short>(bits), SymmColumnSmallVec_32s16s(kernel, symmetryType, bits, delta));
-        }
-#endif
         if( ksize == 3 )
         {
             if( ddepth == CV_8U && sdepth == CV_32S )
@@ -3833,6 +3824,15 @@ cv::Ptr<cv::BaseColumnFilter> cv::getLinearColumnFilter( int bufType, int dstTyp
                     (kernel, anchor, delta, symmetryType, Cast<float, float>(),
                     SymmColumnSmallVec_32f(kernel, symmetryType, 0, delta));
         }
+#if CV_NEON
+        if( ksize == 5 )
+        {
+            if( ddepth == CV_16S && sdepth == CV_32S )
+                return makePtr<SymmColumnFilter<FixedPtCastEx<int, short>,
+                    SymmColumnSmallVec_32s16s> >(kernel, anchor, delta, symmetryType,
+                    FixedPtCastEx<int, short>(bits), SymmColumnSmallVec_32s16s(kernel, symmetryType, bits, delta));
+        }
+#endif
         if( ddepth == CV_8U && sdepth == CV_32S )
             return makePtr<SymmColumnFilter<FixedPtCastEx<int, uchar>, SymmColumnVec_32s8u> >
                 (kernel, anchor, delta, symmetryType, FixedPtCastEx<int, uchar>(bits),
@@ -3905,8 +3905,7 @@ cv::Ptr<cv::FilterEngine> cv::createSeparableLinearFilter(
     int bits = 0;
 
     if( sdepth == CV_8U &&
-        ((rtype == KERNEL_SMOOTH+KERNEL_SYMMETRICAL &&
-          ctype == KERNEL_SMOOTH+KERNEL_SYMMETRICAL &&
+        ((rtype & ctype & (KERNEL_SMOOTH+KERNEL_SYMMETRICAL) == KERNEL_SMOOTH+KERNEL_SYMMETRICAL &&
           ddepth == CV_8U) ||
          ((rtype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
           (ctype & (KERNEL_SYMMETRICAL+KERNEL_ASYMMETRICAL)) &&
