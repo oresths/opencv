@@ -282,8 +282,11 @@ void cv::Canny( InputArray _src, OutputArray _dst,
     Mat dx(src.rows, src.cols, CV_16SC(cn));
     Mat dy(src.rows, src.cols, CV_16SC(cn));
 
+    double exec_times = (double) getTickCount();
     Sobel(src, dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
     Sobel(src, dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+    exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+    printf("sobel exec_time = %f ms\n\r", exec_times);
 
     if (L2gradient)
     {
@@ -338,8 +341,11 @@ void cv::Canny( InputArray _src, OutputArray _dst,
     //   0 - the pixel might belong to an edge
     //   1 - the pixel can not belong to an edge
     //   2 - the pixel does belong to an edge
+    double exec_timem, startssm, exec_timen, startssn;
     for (int i = 0; i <= src.rows; i++)
     {
+        if (i==0) exec_timen=0;
+        startssn = (double)getTickCount();
         int* _norm = mag_buf[(i > 0) + 1] + 1;
         if (i < src.rows)
         {
@@ -437,6 +443,10 @@ void cv::Canny( InputArray _src, OutputArray _dst,
 
         // at the very beginning we do not have a complete ring
         // buffer of 3 magnitude rows for non-maxima suppression
+        exec_timen += (double)getTickCount() -startssn;
+        if (i == src.rows) {
+            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+        }
         if (i == 0)
             continue;
 
@@ -459,6 +469,8 @@ void cv::Canny( InputArray _src, OutputArray _dst,
             stack_top = stack_bottom + sz;
         }
 
+        if (i==1) exec_timem=0;
+        startssm = (double)getTickCount();
         int prev_flag = 0;
         for (int j = 0; j < src.cols; j++)
         {
@@ -506,6 +518,10 @@ __ocv_canny_push:
             else
                 _map[j] = 0;
         }
+        exec_timem += (double)getTickCount() -startssm;
+        if (i == src.rows) {
+            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+        }
 
         // scroll the ring buffer
         _mag = mag_buf[0];
@@ -514,6 +530,7 @@ __ocv_canny_push:
         mag_buf[2] = _mag;
     }
 
+    double exec_time = (double) getTickCount();
     // now track the edges (hysteresis thresholding)
     while (stack_top > stack_bottom)
     {
@@ -538,7 +555,10 @@ __ocv_canny_push:
         if (!m[mapstep])    CANNY_PUSH(m + mapstep);
         if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
     }
+    exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+    printf("thresholding exec_time = %f ms\n\r", exec_time);
 
+    double exec_timef = (double) getTickCount();
     // the final pass, form the final image
     const uchar* pmap = map + mapstep + 1;
     uchar* pdst = dst.ptr();
@@ -547,6 +567,8 @@ __ocv_canny_push:
         for (int j = 0; j < src.cols; j++)
             pdst[j] = (uchar)-(pmap[j] >> 1);
     }
+    exec_timef = ((double) getTickCount() - exec_timef) * 1000. / getTickFrequency();
+    printf("final exec_time = %f ms\n\r", exec_timef);
 }
 
 void cvCanny( const CvArr* image, CvArr* edges, double threshold1,
