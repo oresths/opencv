@@ -231,10 +231,16 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 
 #ifdef HAVE_TBB
 
+typedef tbb::spin_mutex stackMutexType;
+static stackMutexType stackMutex;
+
+#define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
+#define CANNY_POP(d)     (d) = *--stack_top
+
 static void
 maxima( Range boundaries, const Mat& src, std::vector<uchar*> stack, uchar **stack_top,
         uchar **stack_bottom, uchar* map, ptrdiff_t mapstep, int maxsize, int low,
-        int high, const Mat& dx, const Mat& dy, bool L2gradient, const int cn )
+        int high, Mat& dx, Mat& dy, bool L2gradient, const int cn )
 {
     AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
@@ -364,6 +370,8 @@ maxima( Range boundaries, const Mat& src, std::vector<uchar*> stack, uchar **sta
         const short* _x = dx.ptr<short>(i-1);
         const short* _y = dy.ptr<short>(i-1);
 
+        tbb::spin_mutex::scoped_lock lock;
+        lock.acquire(stackMutex);
         if ((stack_top - stack_bottom) + src.cols > maxsize)
         {
             int sz = (int)(stack_top - stack_bottom);
@@ -372,6 +380,7 @@ maxima( Range boundaries, const Mat& src, std::vector<uchar*> stack, uchar **sta
             stack_bottom = &stack[0];
             stack_top = stack_bottom + sz;
         }
+        lock.release();
 
         if (i==boundaries.start+1) exec_timem=0;
         startssm = (double)getTickCount();
@@ -416,7 +425,9 @@ maxima( Range boundaries, const Mat& src, std::vector<uchar*> stack, uchar **sta
 __ocv_canny_push:
             if (!prev_flag && m > high && _map[j-mapstep] != 2)
             {
+                lock.acquire(stackMutex);
                 CANNY_PUSH(_map + j);
+                lock.release();
                 prev_flag = 1;
             }
             else
@@ -554,14 +565,16 @@ void cv::Canny( InputArray _src, OutputArray _dst,
 
     int threadsNumber = tbb::task_scheduler_init::default_num_threads();
     int grainSize = src.rows / threadsNumber;
+    tbb::task_group g;
     for (int i = 0; i < threadsNumber; ++i) {
         if (i < threadsNumber - 1)
-            maxima(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
-                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
+            g.run( maxima(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
+                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn ) );
         else
-            maxima(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
-                                map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
+            g.run( maxima(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
+                                map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn ) );
     }
+    g.wait();
 
 
 #else
