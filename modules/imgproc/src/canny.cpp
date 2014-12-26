@@ -234,20 +234,20 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 #define CANNY_POP(d)     (d) = *--stack_top
 
+static tbb::spin_mutex stackMutex;
+
 class maximaSuppression
 {
 public:
-    maximaSuppression(const Mat& _src, std::vector<uchar*> _stack, uchar **_stack_top,
+    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> _stack, uchar **_stack_top,
             uchar **_stack_bottom, uchar* _map, ptrdiff_t _mapstep, int _maxsize, int _low,
             int _high, Mat& _dx, Mat& _dy, bool _L2gradient, const int _cn)
-        : src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
+        : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
           map(_map), mapstep(_mapstep), maxsize(_maxsize), low(_low), high(_high),
           dx(_dx), dy(_dy), L2gradient(_L2gradient), cn(_cn)
     {}
 
-    int test(){int n=1; return n;}
-
-    void operator()(Range boundaries)
+    void operator()()
     {
         AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
@@ -392,6 +392,7 @@ public:
             if (i==boundaries.start+1) exec_timem=0;
             startssm = (double)getTickCount();
             int prev_flag = 0;
+            bool canny_push = false;
             for (int j = 0; j < src.cols; j++)
             {
                 #define CANNY_SHIFT 15
@@ -410,35 +411,42 @@ public:
 
                     if (y < tg22x)
                     {
-                        if (m > _mag[j-1] && m >= _mag[j+1]) goto __ocv_canny_push;
+                        if (m > _mag[j-1] && m >= _mag[j+1]) canny_push = true;
                     }
                     else
                     {
                         int tg67x = tg22x + (x << (CANNY_SHIFT+1));
                         if (y > tg67x)
                         {
-                            if (m > _mag[j+magstep2] && m >= _mag[j+magstep1]) goto __ocv_canny_push;
+                            if (m > _mag[j+magstep2] && m >= _mag[j+magstep1]) canny_push = true;
                         }
                         else
                         {
                             int s = (xs ^ ys) < 0 ? -1 : 1;
-                            if (m > _mag[j+magstep2-s] && m > _mag[j+magstep1+s]) goto __ocv_canny_push;
+                            if (m > _mag[j+magstep2-s] && m > _mag[j+magstep1+s]) canny_push = true;
                         }
                     }
                 }
-                prev_flag = 0;
-                _map[j] = uchar(1);
-                continue;
-    __ocv_canny_push:
-                if (!prev_flag && m > high && _map[j-mapstep] != 2)
+                if (!canny_push)
                 {
-                    lock.acquire(stackMutex);
-                    CANNY_PUSH(_map + j);
-                    lock.release();
-                    prev_flag = 1;
+                    prev_flag = 0;
+                    _map[j] = uchar(1);
+                    continue;
                 }
                 else
-                    _map[j] = 0;
+                {
+                    if (!prev_flag && m > high && _map[j-mapstep] != 2)
+                    {
+                        lock.acquire(stackMutex);
+                        CANNY_PUSH(_map + j);
+                        lock.release();
+                        prev_flag = 1;
+                    }
+                    else
+                        _map[j] = 0;
+
+                    canny_push = false;
+                }
             }
             exec_timem += (double)getTickCount() -startssm;
             if (i == src.rows) {
@@ -454,8 +462,7 @@ public:
     }
 
 private:
-    tbb::spin_mutex stackMutex;
-
+    Range boundaries;
     const Mat& src;
     std::vector<uchar*> stack;
     uchar **stack_top;
@@ -475,7 +482,6 @@ private:
 
 } // namespace cv
 
-void test1(){int o=2;}
 
 void cv::Canny( InputArray _src, OutputArray _dst,
                 double low_thresh, double high_thresh,
@@ -593,18 +599,24 @@ void cv::Canny( InputArray _src, OutputArray _dst,
     int threadsNumber = tbb::task_scheduler_init::default_num_threads();
     int grainSize = src.rows / threadsNumber;
     tbb::task_group g;
-    maximaSuppression ms( src, stack, stack_top, stack_bottom,
-            map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
+    maximaSuppression *ms[16];
+//    maximaSuppression ms( Range(1,100),src, stack, stack_top, stack_bottom,
+//            map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
     for (int i = 0; i < threadsNumber; ++i) {
         if (i < threadsNumber - 1)
-//            g.run( &(ms.test));
-//        g.run( test1);
-            g.run( maximaSuppression );
+        {
+            ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
+                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
+            g.run(*ms[i]);
+        }
 //            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
 
         else
-//            g.run( &ms.test);
-        g.run( &test1);
+        {
+            ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
+                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
+            g.run(*ms[i]);
+        }
 //            g.run( ms(Range(i * grainSize, src.rows)) );
     }
     g.wait();
