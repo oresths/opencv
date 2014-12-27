@@ -239,8 +239,8 @@ static tbb::spin_mutex stackMutex;
 class maximaSuppression
 {
 public:
-    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> _stack, uchar **_stack_top,
-            uchar **_stack_bottom, uchar* _map, ptrdiff_t _mapstep, int _maxsize, int _low,
+    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> &_stack, uchar** &_stack_top,
+            uchar** &_stack_bottom, uchar* &_map, ptrdiff_t _mapstep, int _maxsize, int _low,
             int _high, Mat& _dx, Mat& _dy, bool _L2gradient, const int _cn)
         : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
           map(_map), mapstep(_mapstep), maxsize(_maxsize), low(_low), high(_high),
@@ -361,7 +361,7 @@ public:
             // at the very beginning we do not have a complete ring
             // buffer of 3 magnitude rows for non-maxima suppression
             exec_timen += (double)getTickCount() -startssn;
-            if (i == src.rows) {
+            if (i == boundaries.end) {
                 printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
             }
             if (i <= boundaries.start)
@@ -449,7 +449,7 @@ public:
                 }
             }
             exec_timem += (double)getTickCount() -startssm;
-            if (i == src.rows) {
+            if (i == boundaries.end) {
                 printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
             }
 
@@ -464,10 +464,10 @@ public:
 private:
     Range boundaries;
     const Mat& src;
-    std::vector<uchar*> stack;
-    uchar **stack_top;
-    uchar **stack_bottom;
-    uchar* map;
+    std::vector<uchar*> &stack;
+    uchar** &stack_top;
+    uchar** &stack_bottom;
+    uchar* &map;
     ptrdiff_t mapstep;
     int maxsize;
     int low;
