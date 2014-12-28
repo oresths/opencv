@@ -237,21 +237,70 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 #define CANNY_POP(d)     (d) = *--stack_top
 
-static tbb::spin_mutex stackMutex;
+static tbb::mutex stackMutex;
 
-class maximaSuppression
-{
-public:
-    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> &_stack, uchar** &_stack_top,
-            uchar** &_stack_bottom, uchar* &_map, ptrdiff_t _mapstep, int _maxsize, int _low,
-            int _high, Mat& _dx, Mat& _dy, bool _L2gradient, const int _cn)
-        : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
-          map(_map), mapstep(_mapstep), maxsize(_maxsize), low(_low), high(_high),
-          dx(_dx), dy(_dy), L2gradient(_L2gradient), cn(_cn)
-    {}
+struct max_struct{
+    Range _boundaries;
+    Mat _src;
+    std::vector<uchar*> _stack;
+    uchar** _stack_top;
+    uchar** _stack_bottom;
+    uchar* _map;
+    ptrdiff_t _mapstep;
+    int _maxsize;
+    int _low;
+    int _high;
+    Mat _dx;
+    Mat _dy;
+    bool _L2gradient;
+    int _cn;
+};
 
-    void operator()()
+//class maximaSuppression
+//{
+//public:
+//    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> &_stack, uchar** &_stack_top,
+//            uchar** &_stack_bottom, uchar* &_map, ptrdiff_t _mapstep, int _maxsize, int _low,
+//            int _high, Mat& _dx, Mat& _dy, bool _L2gradient, const int _cn)
+//        : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
+//          map(_map), mapstep(_mapstep), maxsize(_maxsize), low(_low), high(_high),
+//          dx(_dx), dy(_dy), L2gradient(_L2gradient), cn(_cn)
+//    {}
+void maxim(void *threadarg);
+    void maxim(void *threadarg)
     {
+        Range boundaries;
+        Mat src;
+        std::vector<uchar*> stack;
+        uchar** stack_top;
+        uchar** stack_bottom;
+        uchar* map;
+        ptrdiff_t mapstep;
+        int maxsize;
+        int low;
+        int high;
+        Mat dx;
+        Mat dy;
+        bool L2gradient;
+        int cn;
+
+        struct max_struct *mydata;
+        mydata = (struct max_struct *) threadarg;
+        boundaries= mydata->_boundaries;
+        src= mydata->_src;
+        stack= mydata->_stack;
+        stack_top= mydata->_stack_top;
+        stack_bottom= mydata->_stack_bottom;
+        map= mydata->_map;
+        mapstep= mydata->_mapstep;
+        maxsize= mydata->_maxsize;
+        low= mydata->_low;
+        high= mydata->_high;
+        dx= mydata->_dx;
+        dy= mydata->_dy;
+        L2gradient= mydata->_L2gradient;
+        cn= mydata->_cn;
+
         AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
         int* mag_buf[3];
@@ -380,7 +429,7 @@ public:
             const short* _x = dx.ptr<short>(i-1);
             const short* _y = dy.ptr<short>(i-1);
 
-            tbb::spin_mutex::scoped_lock lock;
+            tbb::mutex::scoped_lock lock;
             lock.acquire(stackMutex);
             if ((stack_top - stack_bottom) + src.cols > maxsize)
             {
@@ -464,22 +513,22 @@ public:
         }
     }
 
-private:
-    Range boundaries;
-    const Mat& src;
-    std::vector<uchar*> &stack;
-    uchar** &stack_top;
-    uchar** &stack_bottom;
-    uchar* &map;
-    ptrdiff_t mapstep;
-    int maxsize;
-    int low;
-    int high;
-    Mat& dx;
-    Mat& dy;
-    bool L2gradient;
-    const int cn;
-};
+//private:
+//    Range boundaries;
+//    const Mat& src;
+//    std::vector<uchar*> &stack;
+//    uchar** &stack_top;
+//    uchar** &stack_bottom;
+//    uchar* &map;
+//    ptrdiff_t mapstep;
+//    int maxsize;
+//    int low;
+//    int high;
+//    Mat& dx;
+//    Mat& dy;
+//    bool L2gradient;
+//    const int cn;
+//};
 
 #endif
 
@@ -601,29 +650,99 @@ void cv::Canny( InputArray _src, OutputArray _dst,
 
     int threadsNumber = tbb::task_scheduler_init::default_num_threads();
     int grainSize = src.rows / threadsNumber;
-    tbb::task_group g;
-    maximaSuppression *ms[16];
+//    tbb::task_group g;
+//    maximaSuppression *ms[16];
+
+    struct max_struct max_struct_array[4];
 //    maximaSuppression ms( Range(1,100),src, stack, stack_top, stack_bottom,
 //            map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
-    for (int i = 0; i < threadsNumber; ++i) {
-        if (i < threadsNumber - 1)
-        {
-            ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
-                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
-            g.run(*ms[i]);
-        }
-//            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
-
-        else
-        {
-            ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
-                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
-            g.run(*ms[i]);
-        }
+//    tbb::tbb_thread* mm[4];
+//    for (int i = 0; i < threadsNumber; ++i) {
+//        if (i < threadsNumber - 1)
+//        {
+            max_struct_array[0]._boundaries=Range(0 * grainSize, (0 + 1) * grainSize);
+            max_struct_array[0]._src=src;
+            max_struct_array[0]._stack=stack;
+            max_struct_array[0]._stack_top=stack_top;
+            max_struct_array[0]._stack_bottom=stack_bottom;
+            max_struct_array[0]._map=map;
+            max_struct_array[0]._mapstep=mapstep;
+            max_struct_array[0]._maxsize=maxsize;
+            max_struct_array[0]._low=low;
+            max_struct_array[0]._high=high;
+            max_struct_array[0]._dx=dx;
+            max_struct_array[0]._dy=dy;
+            max_struct_array[0]._L2gradient=L2gradient;
+            max_struct_array[0]._cn=cn;
+            tbb::tbb_thread m1(maxim, &max_struct_array[0]);
+            max_struct_array[1]._boundaries=Range(1 * grainSize, (1 + 1) * grainSize);
+            max_struct_array[1]._src=src;
+            max_struct_array[1]._stack=stack;
+            max_struct_array[1]._stack_top=stack_top;
+            max_struct_array[1]._stack_bottom=stack_bottom;
+            max_struct_array[1]._map=map;
+            max_struct_array[1]._mapstep=mapstep;
+            max_struct_array[1]._maxsize=maxsize;
+            max_struct_array[1]._low=low;
+            max_struct_array[1]._high=high;
+            max_struct_array[1]._dx=dx;
+            max_struct_array[1]._dy=dy;
+            max_struct_array[1]._L2gradient=L2gradient;
+            max_struct_array[1]._cn=cn;
+            tbb::tbb_thread m2(maxim, &max_struct_array[1]);
+            max_struct_array[2]._boundaries=Range(2 * grainSize, (2 + 1) * grainSize);
+            max_struct_array[2]._src=src;
+            max_struct_array[2]._stack=stack;
+            max_struct_array[2]._stack_top=stack_top;
+            max_struct_array[2]._stack_bottom=stack_bottom;
+            max_struct_array[2]._map=map;
+            max_struct_array[2]._mapstep=mapstep;
+            max_struct_array[2]._maxsize=maxsize;
+            max_struct_array[2]._low=low;
+            max_struct_array[2]._high=high;
+            max_struct_array[2]._dx=dx;
+            max_struct_array[2]._dy=dy;
+            max_struct_array[2]._L2gradient=L2gradient;
+            max_struct_array[2]._cn=cn;
+            tbb::tbb_thread m3(maxim, &max_struct_array[2]);
+//            ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
+//                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
+////            g.run(*ms[i]);
+//        }
+////            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
+//
+//        else
+//        {
+            max_struct_array[3]._boundaries=Range(3 * grainSize, src.rows);
+            max_struct_array[3]._src=src;
+            max_struct_array[3]._stack=stack;
+            max_struct_array[3]._stack_top=stack_top;
+            max_struct_array[3]._stack_bottom=stack_bottom;
+            max_struct_array[3]._map=map;
+            max_struct_array[3]._mapstep=mapstep;
+            max_struct_array[3]._maxsize=maxsize;
+            max_struct_array[3]._low=low;
+            max_struct_array[3]._high=high;
+            max_struct_array[3]._dx=dx;
+            max_struct_array[3]._dy=dy;
+            max_struct_array[3]._L2gradient=L2gradient;
+            max_struct_array[3]._cn=cn;
+            tbb::tbb_thread m4(maxim, &max_struct_array[3]);
+//            ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
+//                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
+//            g.run(*ms[i]);
+//        }
 //            g.run( ms(Range(i * grainSize, src.rows)) );
-    }
-    g.wait();
+//    }
+//    g.wait();
+//    for (int i = 0; i < 4; ++i) {
+//        mm[i].join();
+//    }
 
+m1.join();
+m2.join();
+m3.join();
+m4.join();
 
 #else
 
