@@ -230,6 +230,9 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 #endif
 
 #ifdef HAVE_TBB
+#if CV_SSE2
+    bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
+#endif
 
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 #define CANNY_POP(d)     (d) = *--stack_top
