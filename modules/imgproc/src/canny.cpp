@@ -243,15 +243,55 @@ class maximaSuppression
 {
 public:
     maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> &_stack, uchar** &_stack_top,
-            uchar** &_stack_bottom, uchar* &_map, ptrdiff_t _mapstep, int _maxsize, int _low,
-            int _high, Mat& _dx, Mat& _dy, bool _L2gradient, const int _cn)
+            uchar** &_stack_bottom, uchar* &_map, int _maxsize, int _low,
+            int _high, int _aperture_size, bool _L2gradient)
         : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
-          map(_map), mapstep(_mapstep), maxsize(_maxsize), low(_low), high(_high),
-          dx(_dx), dy(_dy), L2gradient(_L2gradient), cn(_cn)
+          map(_map), maxsize(_maxsize), low(_low), high(_high), aperture_size(_aperture_size),
+          L2gradient(_L2gradient)
     {}
 
     void operator()()
     {
+        const int type = src.type(), cn = CV_MAT_CN(type);
+
+        Mat dx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
+        Mat dy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
+
+        ptrdiff_t mapstep = src.cols + 2;
+
+        if (boundaries.start == 0)
+        {
+            double exec_times = (double) getTickCount();
+            memset(dx.ptr<short>(0), 0, /* cn* */mapstep*sizeof(int));
+            memset(dy.ptr<short>(0), 0, /* cn* */mapstep*sizeof(int));
+
+            Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dx.rowRange(1, boundaries.end + 2), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dy.rowRange(1, boundaries.end + 2), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+            printf("sobel exec_time = %f ms\n\r", exec_times);
+        }
+        else if (boundaries.end == src.rows)
+        {
+            double exec_times = (double) getTickCount();
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+            printf("sobel exec_time = %f ms\n\r", exec_times);
+        }
+        else
+        {
+            double exec_times = (double) getTickCount();
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end + 1), dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end + 1), dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+            printf("sobel exec_time = %f ms\n\r", exec_times);
+        }
+
+//        int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
+//        std::vector<uchar*> stack(maxsize);
+//        uchar **stack_top = &stack[0];
+//        uchar **stack_bottom = &stack[0];
+
         AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
         int* mag_buf[3];
@@ -265,12 +305,12 @@ public:
             if (i==boundaries.start-1) exec_timen=0;
             startssn = (double)getTickCount();
             int* _norm = mag_buf[(i > boundaries.start) - (i == boundaries.start - 1) + 1] + 1;
-            if (i == -1)
-                memset(_norm-1, 0, /* cn* */mapstep*sizeof(int));
-            else if (i < src.rows)
+//            if (i == -1)
+//                memset(_norm-1, 0, /* cn* */mapstep*sizeof(int));
+            if (i < src.rows)
             {
-                short* _dx = dx.ptr<short>(i);
-                short* _dy = dy.ptr<short>(i);
+                short* _dx = dx.ptr<short>(i - boundaries.start + 1);
+                short* _dy = dy.ptr<short>(i - boundaries.start + 1);
 
                 if (!L2gradient)
                 {
@@ -377,8 +417,8 @@ public:
             ptrdiff_t magstep1 = mag_buf[2] - mag_buf[1];
             ptrdiff_t magstep2 = mag_buf[0] - mag_buf[1];
 
-            const short* _x = dx.ptr<short>(i-1);
-            const short* _y = dy.ptr<short>(i-1);
+            const short* _x = dx.ptr<short>(i - boundaries.start);
+            const short* _y = dy.ptr<short>(i - boundaries.start);
 
             tbb::spin_mutex::scoped_lock lock;
             lock.acquire(stackMutex);
@@ -471,14 +511,11 @@ private:
     uchar** &stack_top;
     uchar** &stack_bottom;
     uchar* &map;
-    ptrdiff_t mapstep;
     int maxsize;
     int low;
     int high;
-    Mat& dx;
-    Mat& dy;
+    int aperture_size;
     bool L2gradient;
-    const int cn;
 };
 
 #endif
@@ -534,6 +571,71 @@ void cv::Canny( InputArray _src, OutputArray _dst,
     }
 #endif
 
+#define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
+#define CANNY_POP(d)     (d) = *--stack_top
+
+#if CV_SSE2
+bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
+#endif
+
+// calculate magnitude and angle of gradient, perform non-maxima suppression.
+// fill the map with one of the following values:
+//   0 - the pixel might belong to an edge
+//   1 - the pixel can not belong to an edge
+//   2 - the pixel does belong to an edge
+
+#ifdef HAVE_TBB
+
+if (L2gradient)
+{
+    low_thresh = std::min(32767.0, low_thresh);
+    high_thresh = std::min(32767.0, high_thresh);
+
+    if (low_thresh > 0) low_thresh *= low_thresh;
+    if (high_thresh > 0) high_thresh *= high_thresh;
+}
+int low = cvFloor(low_thresh);
+int high = cvFloor(high_thresh);
+
+ptrdiff_t mapstep = src.cols + 2;
+AutoBuffer<uchar> buffer((src.cols+2)*(src.rows+2));
+
+uchar* map = (uchar*)buffer;
+memset(map, 1, mapstep);
+memset(map + mapstep*(src.rows + 1), 1, mapstep);
+
+int maxsize = std::max(1 << 10, src.cols * src.rows / 10);
+std::vector<uchar*> stack(maxsize);
+uchar **stack_top = &stack[0];
+uchar **stack_bottom = &stack[0];
+
+int threadsNumber = tbb::task_scheduler_init::default_num_threads();
+int grainSize = src.rows / threadsNumber;
+tbb::task_group g;
+maximaSuppression *ms[16];
+//    maximaSuppression ms( Range(1,100),src, stack, stack_top, stack_bottom,
+//            map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
+for (int i = 0; i < threadsNumber; ++i) {
+    if (i < threadsNumber - 1)
+    {
+        ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
+                map, maxsize, low, high, aperture_size, L2gradient);
+        g.run(*ms[i]);
+    }
+//            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
+
+    else
+    {
+        ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
+                map, maxsize, low, high, aperture_size, L2gradient);
+        g.run(*ms[i]);
+    }
+//            g.run( ms(Range(i * grainSize, src.rows)) );
+}
+g.wait();
+
+#else
+
     Mat dx(src.rows, src.cols, CV_16SC(cn));
     Mat dy(src.rows, src.cols, CV_16SC(cn));
 
@@ -572,61 +674,11 @@ void cv::Canny( InputArray _src, OutputArray _dst,
     uchar **stack_top = &stack[0];
     uchar **stack_bottom = &stack[0];
 
-    /* sector numbers
-       (Top-Left Origin)
-
-        1   2   3
-         *  *  *
-          * * *
-        0*******0
-          * * *
-         *  *  *
-        3   2   1
-    */
-
-    #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
-    #define CANNY_POP(d)     (d) = *--stack_top
-
-#if CV_SSE2
-    bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
-#endif
-
     // calculate magnitude and angle of gradient, perform non-maxima suppression.
     // fill the map with one of the following values:
     //   0 - the pixel might belong to an edge
     //   1 - the pixel can not belong to an edge
     //   2 - the pixel does belong to an edge
-
-#ifdef HAVE_TBB
-
-    int threadsNumber = tbb::task_scheduler_init::default_num_threads();
-    int grainSize = src.rows / threadsNumber;
-    tbb::task_group g;
-    maximaSuppression *ms[16];
-//    maximaSuppression ms( Range(1,100),src, stack, stack_top, stack_bottom,
-//            map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn );
-    for (int i = 0; i < threadsNumber; ++i) {
-        if (i < threadsNumber - 1)
-        {
-            ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
-                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
-            g.run(*ms[i]);
-        }
-//            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
-
-        else
-        {
-            ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
-                    map, mapstep, maxsize, low, high, dx, dy, L2gradient, cn);
-            g.run(*ms[i]);
-        }
-//            g.run( ms(Range(i * grainSize, src.rows)) );
-    }
-    g.wait();
-
-
-#else
-
     double exec_timem, startssm, exec_timen, startssn;
     for (int i = 0; i <= src.rows; i++)
     {
