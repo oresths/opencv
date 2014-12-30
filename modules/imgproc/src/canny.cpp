@@ -234,15 +234,12 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
     bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
 #endif
 
-#define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
-#define CANNY_POP(d)     (d) = *--stack_top
-
 static tbb::spin_mutex stackMutex;
 
 class maximaSuppression
 {
 public:
-    maximaSuppression(Range _boundaries, const Mat& _src, uchar* &_map, int _low,
+    maximaSuppression(Range _boundaries, const Mat& _src, uchar* _map, int _low,
             int _high, int _aperture_size, bool _L2gradient)
         : boundaries(_boundaries), src(_src),
           map(_map), low(_low), high(_high), aperture_size(_aperture_size),
@@ -410,6 +407,7 @@ public:
                 continue;
 
             uchar* _map = map + mapstep*i + 1;
+//            tbb::atomic<uchar>* _map = map + mapstep*i + 1;
             _map[-1] = _map[src.cols] = 1;
 
             int* _mag = mag_buf[1] + 1; // take the central row
@@ -430,6 +428,7 @@ public:
                 stack_top = stack_bottom + sz;
             }
 //            lock.release();
+#define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 
             if (i==boundaries.start+1) exec_timem=0;
             startssm = (double)getTickCount();
@@ -502,12 +501,15 @@ public:
             mag_buf[2] = _mag;
         }
 
+//#define CANNY_PUSH2(d)    *(d) = uchar(2), *stack_top++ = (d)
+//#define CANNY_PUSH2(d)    *stack_top++ = (d)
+#define CANNY_POP(d)     (d) = *--stack_top
+
 //        tbb::atomic::
         double exec_time = (double) getTickCount();
         // now track the edges (hysteresis thresholding)
         while (stack_top > stack_bottom)
         {
-            uchar* m;
             if ((stack_top - stack_bottom) + 8 > maxsize)
             {
                 int sz = (int)(stack_top - stack_bottom);
@@ -517,19 +519,17 @@ public:
                 stack_top = stack_bottom + sz;
             }
 
-            CANNY_POP(m);
+            tbb::atomic<uchar>* m;
+            m = (tbb::atomic<uchar>*)*--stack_top;
 
-            tbb::spin_mutex::scoped_lock lock;
-            lock.acquire(stackMutex);
-            if (!m[-1])         CANNY_PUSH(m - 1);
-            if (!m[1])          CANNY_PUSH(m + 1);
-            if (!m[-mapstep-1]) CANNY_PUSH(m - mapstep - 1);
-            if (!m[-mapstep])   CANNY_PUSH(m - mapstep);
-            if (!m[-mapstep+1]) CANNY_PUSH(m - mapstep + 1);
-            if (!m[mapstep-1])  CANNY_PUSH(m + mapstep - 1);
-            if (!m[mapstep])    CANNY_PUSH(m + mapstep);
-            if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
-            lock.release();
+            if ( !m[-1].compare_and_swap(2, 0) )         *stack_top++ = (uchar*)(m - 1);
+            if ( !m[1].compare_and_swap(2, 0) )          *stack_top++ = (uchar*)(m + 1);
+            if ( !m[-mapstep-1].compare_and_swap(2, 0) ) *stack_top++ = (uchar*)(m - mapstep - 1);
+            if ( !m[-mapstep].compare_and_swap(2, 0) )   *stack_top++ = (uchar*)(m - mapstep);
+            if ( !m[-mapstep+1].compare_and_swap(2, 0) ) *stack_top++ = (uchar*)(m - mapstep + 1);
+            if ( !m[mapstep-1].compare_and_swap(2, 0) )  *stack_top++ = (uchar*)(m + mapstep - 1);
+            if ( !m[mapstep].compare_and_swap(2, 0) )    *stack_top++ = (uchar*)(m + mapstep);
+            if ( !m[mapstep+1].compare_and_swap(2, 0) )  *stack_top++ = (uchar*)(m + mapstep + 1);
         }
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
         printf("thresholding exec_time = %f ms\n\r", exec_time);
@@ -538,7 +538,8 @@ public:
 private:
     Range boundaries;
     const Mat& src;
-    uchar* &map;
+//    uchar* &map;
+    uchar* map;
     int low;
     int high;
     int aperture_size;
