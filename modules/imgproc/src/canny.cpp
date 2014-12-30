@@ -242,11 +242,10 @@ static tbb::spin_mutex stackMutex;
 class maximaSuppression
 {
 public:
-    maximaSuppression(Range _boundaries, const Mat& _src, std::vector<uchar*> &_stack, uchar** &_stack_top,
-            uchar** &_stack_bottom, uchar* &_map, int _maxsize, int _low,
+    maximaSuppression(Range _boundaries, const Mat& _src, uchar* &_map, int _low,
             int _high, int _aperture_size, bool _L2gradient)
-        : boundaries(_boundaries), src(_src), stack(_stack), stack_top(_stack_top), stack_bottom(_stack_bottom),
-          map(_map), maxsize(_maxsize), low(_low), high(_high), aperture_size(_aperture_size),
+        : boundaries(_boundaries), src(_src),
+          map(_map), low(_low), high(_high), aperture_size(_aperture_size),
           L2gradient(_L2gradient)
     {}
 
@@ -287,10 +286,10 @@ public:
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
 
-//        int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
-//        std::vector<uchar*> stack(maxsize);
-//        uchar **stack_top = &stack[0];
-//        uchar **stack_bottom = &stack[0];
+        int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
+        std::vector<uchar*> stack(maxsize);
+        uchar **stack_top = &stack[0];
+        uchar **stack_bottom = &stack[0];
 
         AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
@@ -420,8 +419,8 @@ public:
             const short* _x = dx.ptr<short>(i - boundaries.start);
             const short* _y = dy.ptr<short>(i - boundaries.start);
 
-            tbb::spin_mutex::scoped_lock lock;
-            lock.acquire(stackMutex);
+//            tbb::spin_mutex::scoped_lock lock;
+//            lock.acquire(stackMutex);
             if ((stack_top - stack_bottom) + src.cols > maxsize)
             {
                 int sz = (int)(stack_top - stack_bottom);
@@ -430,7 +429,7 @@ public:
                 stack_bottom = &stack[0];
                 stack_top = stack_bottom + sz;
             }
-            lock.release();
+//            lock.release();
 
             if (i==boundaries.start+1) exec_timem=0;
             startssm = (double)getTickCount();
@@ -480,9 +479,9 @@ public:
                 {
                     if (!prev_flag && m > high && _map[j-mapstep] != 2)
                     {
-                        lock.acquire(stackMutex);
+//                        lock.acquire(stackMutex);
                         CANNY_PUSH(_map + j);
-                        lock.release();
+//                        lock.release();
                         prev_flag = 1;
                     }
                     else
@@ -502,16 +501,44 @@ public:
             mag_buf[1] = mag_buf[2];
             mag_buf[2] = _mag;
         }
+
+//        tbb::atomic::
+        double exec_time = (double) getTickCount();
+        // now track the edges (hysteresis thresholding)
+        while (stack_top > stack_bottom)
+        {
+            uchar* m;
+            if ((stack_top - stack_bottom) + 8 > maxsize)
+            {
+                int sz = (int)(stack_top - stack_bottom);
+                maxsize = maxsize * 3/2;
+                stack.resize(maxsize);
+                stack_bottom = &stack[0];
+                stack_top = stack_bottom + sz;
+            }
+
+            CANNY_POP(m);
+
+            tbb::spin_mutex::scoped_lock lock;
+            lock.acquire(stackMutex);
+            if (!m[-1])         CANNY_PUSH(m - 1);
+            if (!m[1])          CANNY_PUSH(m + 1);
+            if (!m[-mapstep-1]) CANNY_PUSH(m - mapstep - 1);
+            if (!m[-mapstep])   CANNY_PUSH(m - mapstep);
+            if (!m[-mapstep+1]) CANNY_PUSH(m - mapstep + 1);
+            if (!m[mapstep-1])  CANNY_PUSH(m + mapstep - 1);
+            if (!m[mapstep])    CANNY_PUSH(m + mapstep);
+            if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
+            lock.release();
+        }
+        exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+        printf("thresholding exec_time = %f ms\n\r", exec_time);
     }
 
 private:
     Range boundaries;
     const Mat& src;
-    std::vector<uchar*> &stack;
-    uchar** &stack_top;
-    uchar** &stack_bottom;
     uchar* &map;
-    int maxsize;
     int low;
     int high;
     int aperture_size;
@@ -604,10 +631,10 @@ uchar* map = (uchar*)buffer;
 memset(map, 1, mapstep);
 memset(map + mapstep*(src.rows + 1), 1, mapstep);
 
-int maxsize = std::max(1 << 10, src.cols * src.rows / 10);
-std::vector<uchar*> stack(maxsize);
-uchar **stack_top = &stack[0];
-uchar **stack_bottom = &stack[0];
+//int maxsize = std::max(1 << 10, src.cols * src.rows / 10);
+//std::vector<uchar*> stack(maxsize);
+//uchar **stack_top = &stack[0];
+//uchar **stack_bottom = &stack[0];
 
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 int grainSize = src.rows / threadsNumber;
@@ -618,16 +645,16 @@ maximaSuppression *ms[16];
 for (int i = 0; i < threadsNumber; ++i) {
     if (i < threadsNumber - 1)
     {
-        ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src, stack, stack_top, stack_bottom,
-                map, maxsize, low, high, aperture_size, L2gradient);
+        ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src,
+                map, low, high, aperture_size, L2gradient);
         g.run(*ms[i]);
     }
 //            g.run( ms(Range(i * grainSize, (i + 1) * grainSize)) );
 
     else
     {
-        ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src, stack, stack_top, stack_bottom,
-                map, maxsize, low, high, aperture_size, L2gradient);
+        ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src,
+                map, low, high, aperture_size, L2gradient);
         g.run(*ms[i]);
     }
 //            g.run( ms(Range(i * grainSize, src.rows)) );
@@ -868,8 +895,6 @@ __ocv_canny_push:
         mag_buf[2] = _mag;
     }
 
-#endif
-
     double exec_time = (double) getTickCount();
     // now track the edges (hysteresis thresholding)
     while (stack_top > stack_bottom)
@@ -897,6 +922,8 @@ __ocv_canny_push:
     }
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
     printf("thresholding exec_time = %f ms\n\r", exec_time);
+
+#endif
 
     double exec_timef = (double) getTickCount();
     // the final pass, form the final image
