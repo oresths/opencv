@@ -236,6 +236,8 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 
 static tbb::spin_mutex stackMutex;
 
+static tbb::concurrent_queue<uchar*> borderPeaks;
+
 class maximaSuppression
 {
 public:
@@ -407,7 +409,6 @@ public:
                 continue;
 
             uchar* _map = map + mapstep*i + 1;
-//            tbb::atomic<uchar>* _map = map + mapstep*i + 1;
             _map[-1] = _map[src.cols] = 1;
 
             int* _mag = mag_buf[1] + 1; // take the central row
@@ -429,6 +430,7 @@ public:
             }
 //            lock.release();
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
+#define CANNY_POP(d)     (d) = *--stack_top
 
             if (i==boundaries.start+1) exec_timem=0;
             startssm = (double)getTickCount();
@@ -501,11 +503,6 @@ public:
             mag_buf[2] = _mag;
         }
 
-//#define CANNY_PUSH2(d)    *(d) = uchar(2), *stack_top++ = (d)
-//#define CANNY_PUSH2(d)    *stack_top++ = (d)
-#define CANNY_POP(d)     (d) = *--stack_top
-
-//        tbb::atomic::
         double exec_time = (double) getTickCount();
         // now track the edges (hysteresis thresholding)
         while (stack_top > stack_bottom)
@@ -519,17 +516,23 @@ public:
                 stack_top = stack_bottom + sz;
             }
 
-            tbb::atomic<uchar>* m;
-            m = (tbb::atomic<uchar>*)*--stack_top;
+            uchar* m;
+            CANNY_POP(m);
 
-            if ( !m[-1].compare_and_swap(2, 0) )         *stack_top++ = (uchar*)(m - 1);
-            if ( !m[1].compare_and_swap(2, 0) )          *stack_top++ = (uchar*)(m + 1);
-            if ( !m[-mapstep-1].compare_and_swap(2, 0) ) *stack_top++ = (uchar*)(m - mapstep - 1);
-            if ( !m[-mapstep].compare_and_swap(2, 0) )   *stack_top++ = (uchar*)(m - mapstep);
-            if ( !m[-mapstep+1].compare_and_swap(2, 0) ) *stack_top++ = (uchar*)(m - mapstep + 1);
-            if ( !m[mapstep-1].compare_and_swap(2, 0) )  *stack_top++ = (uchar*)(m + mapstep - 1);
-            if ( !m[mapstep].compare_and_swap(2, 0) )    *stack_top++ = (uchar*)(m + mapstep);
-            if ( !m[mapstep+1].compare_and_swap(2, 0) )  *stack_top++ = (uchar*)(m + mapstep + 1);
+            if ( (m <= map + boundaries.start * mapstep) && (m >= map + boundaries.end * mapstep) )
+            {
+                borderPeaks.push(m);
+                continue;
+            }
+
+            if (!m[-1])         CANNY_PUSH(m - 1);
+            if (!m[1])          CANNY_PUSH(m + 1);
+            if (!m[-mapstep-1]) CANNY_PUSH(m - mapstep - 1);
+            if (!m[-mapstep])   CANNY_PUSH(m - mapstep);
+            if (!m[-mapstep+1]) CANNY_PUSH(m - mapstep + 1);
+            if (!m[mapstep-1])  CANNY_PUSH(m + mapstep - 1);
+            if (!m[mapstep])    CANNY_PUSH(m + mapstep);
+            if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
         }
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
         printf("thresholding exec_time = %f ms\n\r", exec_time);
@@ -661,6 +664,25 @@ for (int i = 0; i < threadsNumber; ++i) {
 //            g.run( ms(Range(i * grainSize, src.rows)) );
 }
 g.wait();
+
+double exec_time = (double) getTickCount();
+// now track the edges (hysteresis thresholding)
+uchar* m;
+#define CANNY_PUSH_S(d)    *(d) = uchar(2), borderPeaks.push(d)
+while (borderPeaks.try_pop(m))
+{
+    if (!m[-1])         CANNY_PUSH_S(m - 1);
+    if (!m[1])          CANNY_PUSH_S(m + 1);
+    if (!m[-mapstep-1]) CANNY_PUSH_S(m - mapstep - 1);
+    if (!m[-mapstep])   CANNY_PUSH_S(m - mapstep);
+    if (!m[-mapstep+1]) CANNY_PUSH_S(m - mapstep + 1);
+    if (!m[mapstep-1])  CANNY_PUSH_S(m + mapstep - 1);
+    if (!m[mapstep])    CANNY_PUSH_S(m + mapstep);
+    if (!m[mapstep+1])  CANNY_PUSH_S(m + mapstep + 1);
+}
+exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+printf("serial thresh exec_time = %f ms\n\r", exec_time);
+
 
 #else
 
