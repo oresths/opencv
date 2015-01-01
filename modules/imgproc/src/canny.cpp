@@ -260,8 +260,8 @@ public:
         if (boundaries.start == 0)
         {
             double exec_times = (double) getTickCount();
-            memset(dx.ptr<short>(0), 0, /* cn* */mapstep*sizeof(int));
-            memset(dy.ptr<short>(0), 0, /* cn* */mapstep*sizeof(int));
+            memset(dx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(dy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
 
             Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dx.rowRange(1, boundaries.end + 2), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
             Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dy.rowRange(1, boundaries.end + 2), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
@@ -270,14 +270,14 @@ public:
         }
         else if (boundaries.end == src.rows)
         {
-            //            memset(dx.ptr<short>(dx.rows - 1), 0, /* cn* */mapstep*sizeof(int));
-            //            memset(dy.ptr<short>(dy.rows - 1), 0, /* cn* */mapstep*sizeof(int));
-            //            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx.rowRange(0, dx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            //            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy.rowRange(0, dy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            memset(dx.ptr<short>(dx.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(dy.ptr<short>(dy.rows - 1), 0, cn * mapstep*sizeof(short));
 
             double exec_times = (double) getTickCount();
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+//            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+//            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx.rowRange(0, dx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy.rowRange(0, dy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
@@ -310,8 +310,8 @@ public:
             int* _norm = mag_buf[(i > boundaries.start) - (i == boundaries.start - 1) + 1] + 1;
 //            if (i == -1)
 //                memset(_norm-1, 0, /* cn* */mapstep*sizeof(int));
-            if (i < src.rows)
-            {
+//            if (i < src.rows)
+//            {
                 short* _dx = dx.ptr<short>(i - boundaries.start + 1);
                 short* _dy = dy.ptr<short>(i - boundaries.start + 1);
 
@@ -400,9 +400,9 @@ public:
                     }
                 }
                 _norm[-1] = _norm[src.cols] = 0;
-            }
-            else
-                memset(_norm-1, 0, /* cn* */mapstep*sizeof(int));
+//            }
+//            else
+//                memset(_norm-1, 0, /* cn* */mapstep*sizeof(int));
 
             // at the very beginning we do not have a complete ring
             // buffer of 3 magnitude rows for non-maxima suppression
