@@ -257,7 +257,20 @@ public:
 
         ptrdiff_t mapstep = src.cols + 2;
 
-        if (boundaries.start == 0)
+        if (boundaries.start == 0 && boundaries.end == src.rows)
+        {
+            double exec_times = (double) getTickCount();
+            memset(dx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(dy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(dx.ptr<short>(dx.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(dy.ptr<short>(dy.rows - 1), 0, cn * mapstep*sizeof(short));
+
+            Sobel(src, dx.rowRange(1, dx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src, dy.rowRange(1, dy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+            printf("sobel exec_time = %f ms\n\r", exec_times);
+        }
+        else if (boundaries.start == 0)
         {
             double exec_times = (double) getTickCount();
             memset(dx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
@@ -645,7 +658,8 @@ memset(map + mapstep*(src.rows + 1), 1, mapstep);
 //uchar **stack_top = &stack[0];
 //uchar **stack_bottom = &stack[0];
 
-int threadsNumber = tbb::task_scheduler_init::default_num_threads();
+//int threadsNumber = tbb::task_scheduler_init::default_num_threads();
+int threadsNumber = 1;
 int grainSize = src.rows / threadsNumber;
 tbb::task_group g;
 maximaSuppression *ms[16];
