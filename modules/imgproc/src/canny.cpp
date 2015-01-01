@@ -270,6 +270,11 @@ public:
         }
         else if (boundaries.end == src.rows)
         {
+            //            memset(dx.ptr<short>(dx.rows - 1), 0, /* cn* */mapstep*sizeof(int));
+            //            memset(dy.ptr<short>(dy.rows - 1), 0, /* cn* */mapstep*sizeof(int));
+            //            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx.rowRange(0, dx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            //            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy.rowRange(0, dy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+
             double exec_times = (double) getTickCount();
             Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
             Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
@@ -519,7 +524,7 @@ public:
             uchar* m;
             CANNY_POP(m);
 
-            if ( (m <= map + boundaries.start * mapstep) && (m >= map + boundaries.end * mapstep) )
+            if ( (m < map + (boundaries.start + 2) * mapstep) || (m >= map + boundaries.end * mapstep) )
             {
                 borderPeaks.push(m);
                 continue;
