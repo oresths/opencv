@@ -749,7 +749,10 @@ const uchar* Mat::ptr(int y) const
 template<typename _Tp> inline
 _Tp* Mat::ptr(int y)
 {
-    CV_DbgAssert( y == 0 || (data && dims >= 1 && (unsigned)y < (unsigned)size.p[0]) );
+//    CV_DbgAssert( y == 0 || (data && dims >= 1 && (unsigned)y < (unsigned)size.p[0]) );
+    if(!!(y == 0 || (data && dims >= 1 && (unsigned)y < (unsigned)size.p[0]))) ;
+    else
+        cv::error( cv::Error::StsAssert, "y == 0 || (data && dims >= 1 && (unsigned)y < (unsigned)size.p[0])", __func__, "/home/menas/nfs/odroid/rootfs/mnt/build/opencv/modules/core/src/matrix.cpp", 752 );
     return (_Tp*)(data + step.p[0] * y);
 }
 

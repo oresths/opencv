@@ -458,7 +458,10 @@ Mat::Mat(const Mat& m, const Range& _rowRange, const Range& _colRange)
 
     if( _colRange != Range::all() && _colRange != Range(0,cols) )
     {
-        CV_Assert( 0 <= _colRange.start && _colRange.start <= _colRange.end && _colRange.end <= m.cols );
+//        CV_Assert( 0 <= _colRange.start && _colRange.start <= _colRange.end && _colRange.end <= m.cols );
+        if(!!(0 <= _colRange.start && _colRange.start <= _colRange.end && _colRange.end <= m.cols)) ;
+        else
+            cv::error( cv::Error::StsAssert, "0 <= _colRange.start && _colRange.start <= _colRange.end && _colRange.end <= m.cols", __func__, "/home/menas/nfs/odroid/rootfs/mnt/build/opencv/modules/core/src/matrix.cpp", 461 );
         cols = _colRange.size();
         data += _colRange.start*elemSize();
         flags &= cols < m.cols ? ~CONTINUOUS_FLAG : -1;
@@ -2083,7 +2086,10 @@ void _OutputArray::create(Size _sz, int mtype, int i, bool allowTransposed, int 
     int k = kind();
     if( k == MAT && i < 0 && !allowTransposed && fixedDepthMask == 0 )
     {
-        CV_Assert(!fixedSize() || ((Mat*)obj)->size.operator()() == _sz);
+//        CV_Assert(!fixedSize() || ((Mat*)obj)->size.operator()() == _sz);
+        if(!!(!fixedSize() || ((Mat*)obj)->size.operator()() == _sz)) ;
+        else
+            cv::error( cv::Error::StsAssert, "!fixedSize() || ((Mat*)obj)->size.operator()() == _sz", __func__, "/home/menas/nfs/odroid/rootfs/mnt/build/opencv/modules/core/src/matrix.cpp", 2086 );
         CV_Assert(!fixedType() || ((Mat*)obj)->type() == mtype);
         ((Mat*)obj)->create(_sz, mtype);
         return;
