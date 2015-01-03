@@ -679,22 +679,15 @@ memset(map + mapstep*(src.rows + 1), 1, mapstep);
 
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 int grainSize = src.rows / threadsNumber;
-tbb::task_group g;
-tbbCanny *ms[16];
 
-for (int i = 0; i < threadsNumber; ++i) {
+tbb::task_group g;
+
+for (int i = 0; i < threadsNumber; ++i)
+{
     if (i < threadsNumber - 1)
-    {
-        ms[i] = new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src,
-                map, low, high, aperture_size, L2gradient);
-        g.run(*ms[i]);
-    }
+        g.run(*(new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient)));
     else
-    {
-        ms[i] = new tbbCanny(Range(i * grainSize, src.rows), src,
-                map, low, high, aperture_size, L2gradient);
-        g.run(*ms[i]);
-    }
+        g.run(*(new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient)));
 }
 g.wait();
 
