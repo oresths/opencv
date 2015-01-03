@@ -236,10 +236,10 @@ static bool ocl_Canny(InputArray _src, OutputArray _dst, float low_thresh, float
 
 static tbb::concurrent_queue<uchar*> borderPeaks;
 
-class maximaSuppression
+class tbbCanny
 {
 public:
-    maximaSuppression(const Range _boundaries, const Mat& _src, uchar* _map, int _low,
+    tbbCanny(const Range _boundaries, const Mat& _src, uchar* _map, int _low,
             int _high, int _aperture_size, bool _L2gradient)
         : boundaries(_boundaries), src(_src), map(_map), low(_low), high(_high),
           aperture_size(_aperture_size), L2gradient(_L2gradient)
@@ -680,18 +680,18 @@ memset(map + mapstep*(src.rows + 1), 1, mapstep);
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 int grainSize = src.rows / threadsNumber;
 tbb::task_group g;
-maximaSuppression *ms[16];
+tbbCanny *ms[16];
 
 for (int i = 0; i < threadsNumber; ++i) {
     if (i < threadsNumber - 1)
     {
-        ms[i] = new maximaSuppression(Range(i * grainSize, (i + 1) * grainSize), src,
+        ms[i] = new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src,
                 map, low, high, aperture_size, L2gradient);
         g.run(*ms[i]);
     }
     else
     {
-        ms[i] = new maximaSuppression(Range(i * grainSize, src.rows), src,
+        ms[i] = new tbbCanny(Range(i * grainSize, src.rows), src,
                 map, low, high, aperture_size, L2gradient);
         g.run(*ms[i]);
     }
