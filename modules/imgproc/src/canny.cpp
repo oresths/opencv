@@ -239,67 +239,99 @@ static tbb::concurrent_queue<uchar*> borderPeaks;
 class maximaSuppression
 {
 public:
-    maximaSuppression(Range _boundaries, const Mat& _src, uchar* _map, int _low,
+    maximaSuppression(const Range _boundaries, const Mat& _src, uchar* _map, int _low,
             int _high, int _aperture_size, bool _L2gradient)
         : boundaries(_boundaries), src(_src), map(_map), low(_low), high(_high),
           aperture_size(_aperture_size), L2gradient(_L2gradient)
     {}
 
+    // This parallel version of Canny algorithm splits the src image in threadsNumber horizontal slices.
+    // The first row of each slice contains the last row of the previous slice and
+    // the last row of each slice contains the first row of the next slice
+    // so that each slice is independent and no mutexes are required.
     void operator()()
     {
         const int type = src.type(), cn = CV_MAT_CN(type);
 
-        Mat dx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
-        Mat dy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
+        Mat dx, dy;
 
         ptrdiff_t mapstep = src.cols + 2;
 
+        // In sobel transform we calculate ksize2 extra lines for the first and last rows of each slice
+        // because IPPDerivSobel expects only isolated ROIs, in contrast with the opencv version which
+        // uses the pixels outside of the ROI to form a border.
+        uchar ksize2 = aperture_size / 2;
+
         if (boundaries.start == 0 && boundaries.end == src.rows)
         {
-            double exec_times = (double) getTickCount();
-            memset(dx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
-            memset(dy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
-            memset(dx.ptr<short>(dx.rows - 1), 0, cn * mapstep*sizeof(short));
-            memset(dy.ptr<short>(dy.rows - 1), 0, cn * mapstep*sizeof(short));
+            Mat tempdx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
+            Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
 
-            Sobel(src, dx.rowRange(1, dx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            Sobel(src, dy.rowRange(1, dy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+            double exec_times = (double) getTickCount();
+            memset(tempdx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(tempdy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * mapstep*sizeof(short));
+
+            Sobel(src, tempdx.rowRange(1, tempdx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
+            Sobel(src, tempdy.rowRange(1, tempdy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+
+            dx = tempdx;
+            dy = tempdy;
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.start == 0)
         {
-            double exec_times = (double) getTickCount();
-            memset(dx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
-            memset(dy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
 
-            Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dx.rowRange(1, boundaries.end + 2),
+            double exec_times = (double) getTickCount();
+            memset(tempdx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(tempdy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+
+            Sobel(src.rowRange(boundaries.start, boundaries.end + 1 + ksize2), tempdx.rowRange(1, tempdx.rows),
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            Sobel(src.rowRange(boundaries.start, boundaries.end + 1), dy.rowRange(1, boundaries.end + 2),
+            Sobel(src.rowRange(boundaries.start, boundaries.end + 1 + ksize2), tempdy.rowRange(1, tempdy.rows),
                     CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+
+            dx = tempdx.rowRange(0, tempdx.rows - ksize2);
+            dy = tempdy.rowRange(0, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.end == src.rows)
         {
-            memset(dx.ptr<short>(dx.rows - 1), 0, cn * mapstep*sizeof(short));
-            memset(dy.ptr<short>(dy.rows - 1), 0, cn * mapstep*sizeof(short));
+            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+
+            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * mapstep*sizeof(short));
 
             double exec_times = (double) getTickCount();
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dx.rowRange(0, dx.rows - 1),
+            Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end), tempdx.rowRange(0, tempdx.rows - 1),
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end), dy.rowRange(0, dy.rows - 1),
+            Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end), tempdy.rowRange(0, tempdy.rows - 1),
                     CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+
+            dx = tempdx.rowRange(ksize2, tempdx.rows);
+            dy = tempdy.rowRange(ksize2, tempdy.rows);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else
         {
+            Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
+            Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
+
             double exec_times = (double) getTickCount();
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end + 1), dx,
+            Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end + 1 + ksize2), tempdx,
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
-            Sobel(src.rowRange(boundaries.start - 1, boundaries.end + 1), dy,
+            Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end + 1 + ksize2), tempdy,
                     CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+
+            dx = tempdx.rowRange(ksize2, tempdx.rows - ksize2);
+            dy = tempdy.rowRange(ksize2, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
             printf("sobel exec_time = %f ms\n\r", exec_times);
         }
@@ -533,6 +565,8 @@ public:
             uchar* m;
             CANNY_POP(m);
 
+            // Stops thresholding from expanding to other slices by sending pixels in the borders of each
+            // slice in a queue to be serially processed.
             if ( (m < map + (boundaries.start + 2) * mapstep) || (m >= map + boundaries.end * mapstep) )
             {
                 borderPeaks.push(m);
@@ -553,7 +587,7 @@ public:
     }
 
 private:
-    Range boundaries;
+    const Range boundaries;
     const Mat& src;
     uchar* map;
     int low;
