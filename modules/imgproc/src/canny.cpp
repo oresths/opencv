@@ -44,7 +44,7 @@
 
 
 #if defined (HAVE_IPP) && (IPP_VERSION_MAJOR >= 7)
-#define USE_IPP_CANNY 1
+#define USE_IPP_CANNYa 1
 #else
 #undef USE_IPP_CANNY
 #endif
@@ -279,7 +279,7 @@ public:
             dx = tempdx;
             dy = tempdy;
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-            printf("sobel exec_time = %f ms\n\r", exec_times);
+//            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.start == 0)
         {
@@ -298,7 +298,7 @@ public:
             dx = tempdx.rowRange(0, tempdx.rows - ksize2);
             dy = tempdy.rowRange(0, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-            printf("sobel exec_time = %f ms\n\r", exec_times);
+//            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.end == src.rows)
         {
@@ -317,7 +317,7 @@ public:
             dx = tempdx.rowRange(ksize2, tempdx.rows);
             dy = tempdy.rowRange(ksize2, tempdy.rows);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-            printf("sobel exec_time = %f ms\n\r", exec_times);
+//            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else
         {
@@ -333,7 +333,7 @@ public:
             dx = tempdx.rowRange(ksize2, tempdx.rows - ksize2);
             dy = tempdy.rowRange(ksize2, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-            printf("sobel exec_time = %f ms\n\r", exec_times);
+//            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
 
         int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
@@ -453,7 +453,7 @@ public:
             // buffer of 3 magnitude rows for non-maxima suppression
             exec_timen += (double)getTickCount() -startssn;
             if (i == boundaries.end) {
-                printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+//                printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
             }
             if (i <= boundaries.start)
                 continue;
@@ -539,7 +539,7 @@ public:
             }
             exec_timem += (double)getTickCount() -startssm;
             if (i == boundaries.end) {
-                printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+//                printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
             }
 
             // scroll the ring buffer
@@ -583,7 +583,7 @@ public:
             if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
         }
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-        printf("thresholding exec_time = %f ms\n\r", exec_time);
+//        printf("thresholding exec_time = %f ms\n\r", exec_time);
     }
 
 private:
@@ -680,6 +680,16 @@ memset(map + mapstep*(src.rows + 1), 1, mapstep);
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 int grainSize = src.rows / threadsNumber;
 
+uchar ksize2 = aperture_size / 2;
+int minGrainSize = 1 + ksize2;
+int maxGrainSize = src.rows - 2 - 2*ksize2;
+
+if ( !( minGrainSize <= grainSize && grainSize <= maxGrainSize ) )
+{
+    threadsNumber = 1;
+    grainSize = src.rows;
+}
+
 tbb::task_group g;
 
 for (int i = 0; i < threadsNumber; ++i)
@@ -707,7 +717,7 @@ while (borderPeaks.try_pop(m))
     if (!m[mapstep+1])  CANNY_PUSH_SERIAL(m + mapstep + 1);
 }
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-printf("serial thresh exec_time = %f ms\n\r", exec_time);
+//printf("serial thresh exec_time = %f ms\n\r", exec_time);
 
 
 #else
@@ -719,7 +729,7 @@ printf("serial thresh exec_time = %f ms\n\r", exec_time);
     Sobel(src, dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
     Sobel(src, dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
     exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-    printf("sobel exec_time = %f ms\n\r", exec_times);
+//    printf("sobel exec_time = %f ms\n\r", exec_times);
 
     if (L2gradient)
     {
@@ -859,7 +869,7 @@ printf("serial thresh exec_time = %f ms\n\r", exec_time);
         // buffer of 3 magnitude rows for non-maxima suppression
         exec_timen += (double)getTickCount() -startssn;
         if (i == src.rows) {
-            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+//            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
         }
         if (i == 0)
             continue;
@@ -934,7 +944,7 @@ __ocv_canny_push:
         }
         exec_timem += (double)getTickCount() -startssm;
         if (i == src.rows) {
-            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+//            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
         }
 
         // scroll the ring buffer
@@ -970,7 +980,7 @@ __ocv_canny_push:
         if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
     }
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-    printf("thresholding exec_time = %f ms\n\r", exec_time);
+//    printf("thresholding exec_time = %f ms\n\r", exec_time);
 
 #endif
 
@@ -984,7 +994,7 @@ __ocv_canny_push:
             pdst[j] = (uchar)-(pmap[j] >> 1);
     }
     exec_timef = ((double) getTickCount() - exec_timef) * 1000. / getTickFrequency();
-    printf("final exec_time = %f ms\n\r", exec_timef);
+//    printf("final exec_time = %f ms\n\r", exec_timef);
 }
 
 void cvCanny( const CvArr* image, CvArr* edges, double threshold1,

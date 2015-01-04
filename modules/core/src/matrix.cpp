@@ -450,7 +450,10 @@ Mat::Mat(const Mat& m, const Range& _rowRange, const Range& _colRange)
     *this = m;
     if( _rowRange != Range::all() && _rowRange != Range(0,rows) )
     {
-        CV_Assert( 0 <= _rowRange.start && _rowRange.start <= _rowRange.end && _rowRange.end <= m.rows );
+//        CV_Assert( 0 <= _rowRange.start && _rowRange.start <= _rowRange.end && _rowRange.end <= m.rows );
+        if(!!(0 <= _rowRange.start && _rowRange.start <= _rowRange.end && _rowRange.end <= m.rows)) ;
+        else
+            cv::error( cv::Error::StsAssert, "0 <= _rowRange.start && _rowRange.start <= _rowRange.end && _rowRange.end <= m.rows", __func__, "/home/menas/nfs/odroid/rootfs/mnt/build/opencv/modules/core/src/matrix.cpp", 453 );
         rows = _rowRange.size();
         data += step*_rowRange.start;
         flags |= SUBMATRIX_FLAG;
