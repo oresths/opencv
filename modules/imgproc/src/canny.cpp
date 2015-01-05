@@ -270,8 +270,8 @@ public:
             double exec_times = (double) getTickCount();
             memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(0), 0, cn * src.cols*sizeof(short));
-            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * mapstep*sizeof(short));
-            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
+            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * src.cols*sizeof(short));
 
             Sobel(src, tempdx.rowRange(1, tempdx.rows - 1), CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
             Sobel(src, tempdy.rowRange(1, tempdy.rows - 1), CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
