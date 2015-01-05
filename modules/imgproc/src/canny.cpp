@@ -268,8 +268,8 @@ public:
             Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
 
             double exec_times = (double) getTickCount();
-            memset(tempdx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
-            memset(tempdy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
+            memset(tempdy.ptr<short>(0), 0, cn * src.cols*sizeof(short));
             memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * mapstep*sizeof(short));
             memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * mapstep*sizeof(short));
 
@@ -287,8 +287,8 @@ public:
             Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
 
             double exec_times = (double) getTickCount();
-            memset(tempdx.ptr<short>(0), 0, cn * mapstep*sizeof(short));
-            memset(tempdy.ptr<short>(0), 0, cn * mapstep*sizeof(short));
+            memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
+            memset(tempdy.ptr<short>(0), 0, cn * src.cols*sizeof(short));
 
             Sobel(src.rowRange(boundaries.start, boundaries.end + 1 + ksize2), tempdx.rowRange(1, tempdx.rows),
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
@@ -305,8 +305,8 @@ public:
             Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
 
-            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * mapstep*sizeof(short));
-            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * mapstep*sizeof(short));
+            memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
+            memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * src.cols*sizeof(short));
 
             double exec_times = (double) getTickCount();
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end), tempdx.rowRange(0, tempdx.rows - 1),
@@ -692,150 +692,15 @@ if ( !( minGrainSize <= grainSize && grainSize <= maxGrainSize ) )
 
 tbb::task_group g;
 
-tbbCanny *ms[16];
-//Ptr<tbbCanny> cvp[16];
-if (threadsNumber==4)
+for (int i = 0; i < threadsNumber; ++i)
 {
-    // x
-    tbbCanny& m0 = *new tbbCanny(Range(0 * grainSize, ( 0 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-    tbbCanny& m1 = *new tbbCanny(Range(1 * grainSize, ( 1 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-    tbbCanny& m2 = *new tbbCanny(Range(2 * grainSize, ( 2 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-    tbbCanny& m3 = *new tbbCanny(Range(3 * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient);
-    g.run(m0);
-    g.run(m1);
-    g.run(m2);
-    g.run(m3);
-
-    // for 2,3 v, for 4 x
-//    threadsNumber = 4;
-//    grainSize = src.rows / threadsNumber;
-//    minGrainSize = 1 + ksize2;
-//    maxGrainSize = src.rows - 2 - 2*ksize2;
-//    if ( !( minGrainSize <= grainSize && grainSize <= maxGrainSize ) )
-//    {
-//        threadsNumber = 1;
-//        grainSize = src.rows;
-//    }
-//    for (int i = 0; i < threadsNumber; ++i)
-//    {
-//        if (i < threadsNumber - 1)
-//        {
-//            ms[i] = new tbbCanny(Range(i * grainSize, ( i + 1 ) * grainSize), src, map,
-//                    low, high, aperture_size, L2gradient);
-//            g.run(*ms[i]);
-//        }
-//        else
-//        {
-//            ms[i] = new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high,
-//                    aperture_size, L2gradient);
-//            g.run(*ms[i]);
-//        }
-//    }
-
-    // x
-//        ms[0] = new tbbCanny(Range(0 * grainSize, ( 0 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[1] = new tbbCanny(Range(1 * grainSize, ( 1 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[2] = new tbbCanny(Range(2 * grainSize, ( 2 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[3] = new tbbCanny(Range(3 * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient);
-//        tbb::task_handle<tbbCanny> h0(*ms[0]);
-//        tbb::task_handle<tbbCanny> h1(*ms[1]);
-//        tbb::task_handle<tbbCanny> h2(*ms[2]);
-//        tbb::task_handle<tbbCanny> h3(*ms[3]);
-//        g.run(h0);
-//        g.run(h1);
-//        g.run(h2);
-//        g.run(h3);
-
-    // x
-//    Ptr<tbbCanny> dok0(new tbbCanny(Range(0 * grainSize, ( 0 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient));
-//    Ptr<tbbCanny> dok1(new tbbCanny(Range(1 * grainSize, ( 1 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient));
-//    Ptr<tbbCanny> dok2(new tbbCanny(Range(2 * grainSize, ( 2 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient));
-//    Ptr<tbbCanny> dok3(new tbbCanny(Range(3 * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient));
-//
-//        g.run(*dok0);
-//        g.run(*dok1);
-//        g.run(*dok2);
-//        g.run(*dok3);
-
-    // x
-//        ms[0] = new tbbCanny(Range(0 * grainSize, ( 0 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[1] = new tbbCanny(Range(1 * grainSize, ( 1 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[2] = new tbbCanny(Range(2 * grainSize, ( 2 + 1 ) * grainSize), src, map, low, high, aperture_size, L2gradient);
-//        ms[3] = new tbbCanny(Range(3 * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient);
-//        g.run(*ms[0]);
-//        g.run(*ms[1]);
-//        g.run(*ms[2]);
-//        g.run(*ms[3]);
-
-    // v
-//        tbbCanny m1( Range(0 * grainSize, (0 + 1) * grainSize), src, map, low, high, aperture_size, L2gradient );
-//        tbbCanny m2( Range(1 * grainSize, (1 + 1) * grainSize), src, map, low, high, aperture_size, L2gradient );
-//        tbbCanny m3( Range(2 * grainSize, (2 + 1) * grainSize), src, map, low, high, aperture_size, L2gradient );
-//        tbbCanny m4( Range(3 * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient );
-//
-//        g.run(m1);
-//        g.run(m2);
-//        g.run(m3);
-//        g.run(m4);
-
-
-    // x
-//        g.run(*(new tbbCanny(Range(0 * grainSize, ( 0 + 1 ) * grainSize), src, map,
-//                low, high, aperture_size, L2gradient)));
-//        g.run(*(new tbbCanny(Range(1 * grainSize, ( 1 + 1 ) * grainSize), src, map,
-//                low, high, aperture_size, L2gradient)));
-//        g.run(*(new tbbCanny(Range(2 * grainSize, ( 2 + 1 ) * grainSize), src, map,
-//                low, high, aperture_size, L2gradient)));
-//        g.run(*(new tbbCanny(Range(3 * grainSize, src.rows), src, map, low, high,
-//                aperture_size, L2gradient)));
-
-//g.run(*(new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient)));
-//g.run(*(new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient)));
+    if (i < threadsNumber - 1)
+        g.run(tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient));
+    else
+        g.run(tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient));
 }
-else
-{
-    g.run(*(new tbbCanny(Range(0 * grainSize, src.rows), src, map, low, high,
-                    aperture_size, L2gradient)));
-}
+
 g.wait();
-
-//tbbCanny *ms[16];
-//for (int i = 0; i < threadsNumber; ++i)
-//{
-//    if (i < threadsNumber - 1)
-//    {
-//        ms[i] = new tbbCanny(Range(i * grainSize, ( i + 1 ) * grainSize), src, map,
-//                low, high, aperture_size, L2gradient);
-//        g.run(*ms[i]);
-//    }
-//    else
-//    {
-//        ms[i] = new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high,
-//                aperture_size, L2gradient);
-//        g.run(*ms[i]);
-//    }
-//}
-//g.wait();
-
-//for (int i = 0; i < threadsNumber; ++i)
-//{
-//    if (i < threadsNumber - 1)
-//        g.run(*(new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient)));
-//    else
-//    {
-//        g.run(*(new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient)));
-//        g.wait();
-//    }
-//}
-
-//for (int i = 0; i < threadsNumber; ++i)
-//{
-//    if (i < threadsNumber - 1)
-//        g.run(*(new tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient)));
-//    else
-//        g.run(*(new tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient)));
-//}
-//g.wait();
 
 double exec_time = (double) getTickCount();
 // now track the edges (hysteresis thresholding)
