@@ -526,7 +526,9 @@ public:
                 }
                 else
                 {
-                    if (!prev_flag && m > high && _map[j-mapstep] != 2)
+                    // _map[j-mapstep] is short-circuited at the start because previous thread is
+                    // responsible for initializing it.
+                    if (!prev_flag && m > high && (i <= boundaries.start+1 || _map[j-mapstep] != 2) )
                     {
                         CANNY_PUSH(_map + j);
                         prev_flag = 1;
@@ -566,7 +568,7 @@ public:
             CANNY_POP(m);
 
             // Stops thresholding from expanding to other slices by sending pixels in the borders of each
-            // slice in a queue to be serially processed.
+            // slice in a queue to be serially processed later.
             if ( (m < map + (boundaries.start + 2) * mapstep) || (m >= map + boundaries.end * mapstep) )
             {
                 borderPeaks.push(m);
@@ -680,10 +682,10 @@ memset(map + mapstep*(src.rows + 1), 1, mapstep);
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 int grainSize = src.rows / threadsNumber;
 
+// Make a fallback for pictures with too few rows.
 uchar ksize2 = aperture_size / 2;
 int minGrainSize = 1 + ksize2;
 int maxGrainSize = src.rows - 2 - 2*ksize2;
-
 if ( !( minGrainSize <= grainSize && grainSize <= maxGrainSize ) )
 {
     threadsNumber = 1;
