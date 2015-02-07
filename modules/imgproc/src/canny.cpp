@@ -266,6 +266,8 @@ public:
         {
             Mat tempdx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
+//            Mat tempdx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn), Scalar(0));
+//            Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn), Scalar(0));
 
             double exec_times = (double) getTickCount();
             memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
@@ -279,12 +281,22 @@ public:
             dx = tempdx;
             dy = tempdy;
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.start == 0)
         {
-            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
-            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+            int height = (boundaries.end - boundaries.start + 2 + ksize2);
+            int width = src.cols;
+            uchar *tx, *ty;
+            tx = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            ty = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            Mat tempdx(height, width, CV_16SC(cn), tx);
+            Mat tempdy(height, width, CV_16SC(cn), ty);
+
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn), Scalar(0));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn), Scalar(0));
 
             double exec_times = (double) getTickCount();
             memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
@@ -298,12 +310,22 @@ public:
             dx = tempdx.rowRange(0, tempdx.rows - ksize2);
             dy = tempdy.rowRange(0, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else if (boundaries.end == src.rows)
         {
-            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
-            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+            int height = (boundaries.end - boundaries.start + 2 + ksize2);
+            int width = src.cols;
+            uchar *tx, *ty;
+            tx = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            ty = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            Mat tempdx(height, width, CV_16SC(cn), tx);
+            Mat tempdy(height, width, CV_16SC(cn), ty);
+
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn), Scalar(0));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn), Scalar(0));
 
             memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * src.cols*sizeof(short));
@@ -317,12 +339,22 @@ public:
             dx = tempdx.rowRange(ksize2, tempdx.rows);
             dy = tempdy.rowRange(ksize2, tempdy.rows);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
         else
         {
-            Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
-            Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
+            int height = (boundaries.end - boundaries.start + 2 + 2*ksize2);
+            int width = src.cols;
+            uchar *tx, *ty;
+            tx = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            ty = (uchar *)cv::fastMalloc(height * width * 2 * CV_16SC(cn));
+            Mat tempdx(height, width, CV_16SC(cn), tx);
+            Mat tempdy(height, width, CV_16SC(cn), ty);
+
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
+//            Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn), Scalar(0));
+//            Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn), Scalar(0));
 
             double exec_times = (double) getTickCount();
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end + 1 + ksize2), tempdx,
@@ -333,7 +365,7 @@ public:
             dx = tempdx.rowRange(ksize2, tempdx.rows - ksize2);
             dy = tempdy.rowRange(ksize2, tempdy.rows - ksize2);
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("sobel exec_time = %f ms\n\r", exec_times);
         }
 
         int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
@@ -341,7 +373,9 @@ public:
         uchar **stack_top = &stack[0];
         uchar **stack_bottom = &stack[0];
 
-        AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
+        void *buffer = cv::fastMalloc(cn * mapstep * 3 * sizeof(int));
+
+//        AutoBuffer<uchar> buffer(cn * mapstep * 3 * sizeof(int));
 
         int* mag_buf[3];
         mag_buf[0] = (int*)(uchar*)buffer;
@@ -453,7 +487,7 @@ public:
             // buffer of 3 magnitude rows for non-maxima suppression
             exec_timen += (double)getTickCount() -startssn;
             if (i == boundaries.end) {
-//                printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+                printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
             }
             if (i <= boundaries.start)
                 continue;
@@ -541,7 +575,7 @@ public:
             }
             exec_timem += (double)getTickCount() -startssm;
             if (i == boundaries.end) {
-//                printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+                printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
             }
 
             // scroll the ring buffer
@@ -585,7 +619,7 @@ public:
             if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
         }
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//        printf("thresholding exec_time = %f ms\n\r", exec_time);
+        printf("thresholding exec_time = %f ms\n\r", exec_time);
     }
 
 private:
@@ -720,7 +754,7 @@ while (borderPeaks.try_pop(m))
     if (!m[mapstep+1])  CANNY_PUSH_SERIAL(m + mapstep + 1);
 }
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//printf("serial thresh exec_time = %f ms\n\r", exec_time);
+printf("serial thresh exec_time = %f ms\n\r", exec_time);
 
 
 #else
@@ -732,7 +766,7 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
     Sobel(src, dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
     Sobel(src, dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
     exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//    printf("sobel exec_time = %f ms\n\r", exec_times);
+    printf("sobel exec_time = %f ms\n\r", exec_times);
 
     if (L2gradient)
     {
@@ -872,7 +906,7 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
         // buffer of 3 magnitude rows for non-maxima suppression
         exec_timen += (double)getTickCount() -startssn;
         if (i == src.rows) {
-//            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
         }
         if (i == 0)
             continue;
@@ -947,7 +981,7 @@ __ocv_canny_push:
         }
         exec_timem += (double)getTickCount() -startssm;
         if (i == src.rows) {
-//            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
         }
 
         // scroll the ring buffer
@@ -983,7 +1017,7 @@ __ocv_canny_push:
         if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
     }
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//    printf("thresholding exec_time = %f ms\n\r", exec_time);
+    printf("thresholding exec_time = %f ms\n\r", exec_time);
 
 #endif
 
