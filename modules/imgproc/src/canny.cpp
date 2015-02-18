@@ -42,6 +42,11 @@
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
 
+#define PRINT 1
+#define PRINT_ONE 1
+#define THREAD_TO_PRINT 1
+
+//#undef HAVE_TBB
 
 #if defined (HAVE_IPP) && (IPP_VERSION_MAJOR >= 7)
 #define USE_IPP_CANNYa 1
@@ -240,9 +245,9 @@ class tbbCanny
 {
 public:
     tbbCanny(const Range _boundaries, const Mat& _src, uchar* _map, int _low,
-            int _high, int _aperture_size, bool _L2gradient)
+            int _high, int _aperture_size, bool _L2gradient, uint8_t _tid)
         : boundaries(_boundaries), src(_src), map(_map), low(_low), high(_high),
-          aperture_size(_aperture_size), L2gradient(_L2gradient)
+          aperture_size(_aperture_size), L2gradient(_L2gradient), tid(_tid)
     {}
 
     // This parallel version of Canny algorithm splits the src image in threadsNumber horizontal slices.
@@ -267,7 +272,16 @@ public:
             Mat tempdx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
 
-            double exec_times = (double) getTickCount();
+#if PRINT
+            double exec_times;
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
+            exec_times = (double) getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(0), 0, cn * src.cols*sizeof(short));
             memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
@@ -278,15 +292,31 @@ public:
 
             dx = tempdx;
             dy = tempdy;
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#if PRINT_ONE
+            }
+#endif
+#endif
         }
         else if (boundaries.start == 0)
         {
             Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
-
-            double exec_times = (double) getTickCount();
+#if PRINT
+            double exec_times;
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
+            exec_times = (double) getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             memset(tempdx.ptr<short>(0), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(0), 0, cn * src.cols*sizeof(short));
 
@@ -297,8 +327,16 @@ public:
 
             dx = tempdx.rowRange(0, tempdx.rows - ksize2);
             dy = tempdy.rowRange(0, tempdy.rows - ksize2);
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#if PRINT_ONE
+            }
+#endif
+#endif
         }
         else if (boundaries.end == src.rows)
         {
@@ -307,8 +345,16 @@ public:
 
             memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * src.cols*sizeof(short));
-
-            double exec_times = (double) getTickCount();
+#if PRINT
+            double exec_times;
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
+            exec_times = (double) getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end), tempdx.rowRange(0, tempdx.rows - 1),
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end), tempdy.rowRange(0, tempdy.rows - 1),
@@ -316,15 +362,31 @@ public:
 
             dx = tempdx.rowRange(ksize2, tempdx.rows);
             dy = tempdy.rowRange(ksize2, tempdy.rows);
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#if PRINT_ONE
+            }
+#endif
+#endif
         }
         else
         {
             Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
-
-            double exec_times = (double) getTickCount();
+#if PRINT
+            double exec_times;
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
+            exec_times = (double) getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end + 1 + ksize2), tempdx,
                     CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
             Sobel(src.rowRange(boundaries.start - 1 - ksize2, boundaries.end + 1 + ksize2), tempdy,
@@ -332,8 +394,16 @@ public:
 
             dx = tempdx.rowRange(ksize2, tempdx.rows - ksize2);
             dy = tempdy.rowRange(ksize2, tempdy.rows - ksize2);
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//            printf("sobel exec_time = %f ms\n\r", exec_times);
+            printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#if PRINT_ONE
+            }
+#endif
+#endif
         }
 
         int maxsize = std::max(1 << 10, src.cols * (boundaries.end - boundaries.start) / 10);
@@ -353,11 +423,21 @@ public:
         //   0 - the pixel might belong to an edge
         //   1 - the pixel can not belong to an edge
         //   2 - the pixel does belong to an edge
+#if PRINT
         double exec_timem, startssm, exec_timen, startssn;
+#endif
         for (int i = boundaries.start - 1; i <= boundaries.end; i++)
         {
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             if (i==boundaries.start-1) exec_timen=0;
             startssn = (double)getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             int* _norm = mag_buf[(i > boundaries.start) - (i == boundaries.start - 1) + 1] + 1;
 
             short* _dx = dx.ptr<short>(i - boundaries.start + 1);
@@ -451,10 +531,18 @@ public:
 
             // at the very beginning we do not have a complete ring
             // buffer of 3 magnitude rows for non-maxima suppression
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_timen += (double)getTickCount() -startssn;
             if (i == boundaries.end) {
-//                printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+                printf("Thread %d: norm time = %f ms\n", tid, exec_timen*1000./getTickFrequency());
             }
+#if PRINT_ONE
+            }
+#endif
+#endif
             if (i <= boundaries.start)
                 continue;
 
@@ -480,8 +568,16 @@ public:
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 #define CANNY_POP(d)     (d) = *--stack_top
 
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             if (i==boundaries.start+1) exec_timem=0;
             startssm = (double)getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
             int prev_flag = 0;
             bool canny_push = false;
             for (int j = 0; j < src.cols; j++)
@@ -539,10 +635,18 @@ public:
                     canny_push = false;
                 }
             }
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
             exec_timem += (double)getTickCount() -startssm;
             if (i == boundaries.end) {
-//                printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+                printf("Thread %d: maxim suppr time = %f ms\n", tid, exec_timem*1000./getTickFrequency());
             }
+#if PRINT_ONE
+            }
+#endif
+#endif
 
             // scroll the ring buffer
             _mag = mag_buf[0];
@@ -550,8 +654,16 @@ public:
             mag_buf[1] = mag_buf[2];
             mag_buf[2] = _mag;
         }
-
-        double exec_time = (double) getTickCount();
+#if PRINT
+        double exec_time;
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
+        exec_time = (double) getTickCount();
+#if PRINT_ONE
+            }
+#endif
+#endif
         // now track the edges (hysteresis thresholding)
         while (stack_top > stack_bottom)
         {
@@ -584,8 +696,16 @@ public:
             if (!m[mapstep])    CANNY_PUSH(m + mapstep);
             if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
         }
+#if PRINT
+#if PRINT_ONE
+            if (tid == THREAD_TO_PRINT) {
+#endif
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//        printf("thresholding exec_time = %f ms\n\r", exec_time);
+        printf("Thread %d: thresholding exec_time = %f ms\n\r", tid, exec_time);
+#if PRINT_ONE
+            }
+#endif
+#endif
     }
 
 private:
@@ -596,6 +716,7 @@ private:
     int high;
     int aperture_size;
     bool L2gradient;
+    uint8_t tid;
 };
 
 #endif
@@ -697,14 +818,16 @@ tbb::task_group g;
 for (int i = 0; i < threadsNumber; ++i)
 {
     if (i < threadsNumber - 1)
-        g.run(tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient));
+        g.run(tbbCanny(Range(i * grainSize, (i + 1) * grainSize), src, map, low, high, aperture_size, L2gradient, i));
     else
-        g.run(tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient));
+        g.run(tbbCanny(Range(i * grainSize, src.rows), src, map, low, high, aperture_size, L2gradient, i));
 }
 
 g.wait();
 
+#if PRINT
 double exec_time = (double) getTickCount();
+#endif
 // now track the edges (hysteresis thresholding)
 uchar* m;
 #define CANNY_PUSH_SERIAL(d)    *(d) = uchar(2), borderPeaks.push(d)
@@ -719,20 +842,25 @@ while (borderPeaks.try_pop(m))
     if (!m[mapstep])    CANNY_PUSH_SERIAL(m + mapstep);
     if (!m[mapstep+1])  CANNY_PUSH_SERIAL(m + mapstep + 1);
 }
+#if PRINT
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//printf("serial thresh exec_time = %f ms\n\r", exec_time);
+printf("serial thresh exec_time = %f ms\n\r", exec_time);
+#endif
 
 
 #else
 
     Mat dx(src.rows, src.cols, CV_16SC(cn));
     Mat dy(src.rows, src.cols, CV_16SC(cn));
-
+#if PRINT
     double exec_times = (double) getTickCount();
+#endif
     Sobel(src, dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
     Sobel(src, dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
+#if PRINT
     exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
-//    printf("sobel exec_time = %f ms\n\r", exec_times);
+    printf("sobel exec_time = %f ms\n\r", exec_times);
+#endif
 
     if (L2gradient)
     {
@@ -768,11 +896,15 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
     //   0 - the pixel might belong to an edge
     //   1 - the pixel can not belong to an edge
     //   2 - the pixel does belong to an edge
+#if PRINT
     double exec_timem, startssm, exec_timen, startssn;
+#endif
     for (int i = 0; i <= src.rows; i++)
     {
+#if PRINT
         if (i==0) exec_timen=0;
         startssn = (double)getTickCount();
+#endif
         int* _norm = mag_buf[(i > 0) + 1] + 1;
         if (i < src.rows)
         {
@@ -870,10 +1002,12 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 
         // at the very beginning we do not have a complete ring
         // buffer of 3 magnitude rows for non-maxima suppression
+#if PRINT
         exec_timen += (double)getTickCount() -startssn;
         if (i == src.rows) {
-//            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+            printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
         }
+#endif
         if (i == 0)
             continue;
 
@@ -896,8 +1030,10 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
             stack_top = stack_bottom + sz;
         }
 
+#if PRINT
         if (i==1) exec_timem=0;
         startssm = (double)getTickCount();
+#endif
         int prev_flag = 0;
         for (int j = 0; j < src.cols; j++)
         {
@@ -945,10 +1081,12 @@ __ocv_canny_push:
             else
                 _map[j] = 0;
         }
+#if PRINT
         exec_timem += (double)getTickCount() -startssm;
         if (i == src.rows) {
-//            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+            printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
         }
+#endif
 
         // scroll the ring buffer
         _mag = mag_buf[0];
@@ -957,7 +1095,9 @@ __ocv_canny_push:
         mag_buf[2] = _mag;
     }
 
+#if PRINT
     double exec_time = (double) getTickCount();
+#endif
     // now track the edges (hysteresis thresholding)
     while (stack_top > stack_bottom)
     {
@@ -982,12 +1122,16 @@ __ocv_canny_push:
         if (!m[mapstep])    CANNY_PUSH(m + mapstep);
         if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
     }
+#if PRINT
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-//    printf("thresholding exec_time = %f ms\n\r", exec_time);
+    printf("thresholding exec_time = %f ms\n\r", exec_time);
+#endif
 
 #endif
 
+#if PRINT
     double exec_timef = (double) getTickCount();
+#endif
     // the final pass, form the final image
     const uchar* pmap = map + mapstep + 1;
     uchar* pdst = dst.ptr();
@@ -996,8 +1140,10 @@ __ocv_canny_push:
         for (int j = 0; j < src.cols; j++)
             pdst[j] = (uchar)-(pmap[j] >> 1);
     }
+#if PRINT
     exec_timef = ((double) getTickCount() - exec_timef) * 1000. / getTickFrequency();
-//    printf("final exec_time = %f ms\n\r", exec_timef);
+    printf("final exec_time = %f ms\n\r", exec_timef);
+#endif
 }
 
 void cvCanny( const CvArr* image, CvArr* edges, double threshold1,
