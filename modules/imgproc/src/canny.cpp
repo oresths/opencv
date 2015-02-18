@@ -42,9 +42,9 @@
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
 
-#define PRINT 1
-#define PRINT_ONE 1
-#define THREAD_TO_PRINT 1
+#define PRINT 0 //If 1 print individual canny steps time, else print total time
+#define PRINT_ONE 1 //print time for one thread only
+#define THREAD_TO_PRINT 1   //Select thread for the above define
 
 //#undef HAVE_TBB
 
@@ -782,6 +782,10 @@ bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
 
 #ifdef HAVE_TBB
 
+#if !PRINT
+    double exec_time = (double) getTickCount();
+#endif
+
 if (L2gradient)
 {
     low_thresh = std::min(32767.0, low_thresh);
@@ -847,8 +851,17 @@ exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 printf("serial thresh exec_time = %f ms\n\r", exec_time);
 #endif
 
+#if !PRINT
+exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
+#endif
+
 
 #else
+
+#if !PRINT
+    double exec_time = (double) getTickCount();
+#endif
 
     Mat dx(src.rows, src.cols, CV_16SC(cn));
     Mat dy(src.rows, src.cols, CV_16SC(cn));
@@ -1125,6 +1138,11 @@ __ocv_canny_push:
 #if PRINT
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
     printf("thresholding exec_time = %f ms\n\r", exec_time);
+#endif
+
+#if !PRINT
+exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+printf("Canny steps total exec_time = %f ms\n\r", exec_time);
 #endif
 
 #endif
