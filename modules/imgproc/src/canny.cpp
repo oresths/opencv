@@ -41,15 +41,26 @@
 
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
+#include <iostream>
+#include <fstream>
 
-#define PRINT 0 //If 1 print individual canny steps time, else print total time
-#define PRINT_ONE 1 //print time for one thread only
+#define PRINT_STEPS 1 //If 1 print individual canny steps time, else print total time
+#define PRINT_ONE 1 //print time for one thread only | applies to COLLECT too
 #define THREAD_TO_PRINT 1   //Select thread for the above define
+#define COLLECT 1   //collect data to a file instead of printing to terminal
 
-//#undef HAVE_TBB
+
+#undef HAVE_TBB
+
+#ifdef HAVE_TBB
+int threadsNumber = tbb::task_scheduler_init::default_num_threads();
+#endif
+
+cv::Mat times;
+
 
 #if defined (HAVE_IPP) && (IPP_VERSION_MAJOR >= 7)
-#define USE_IPP_CANNYa 1
+#define USE_IPP_CANNY 1
 #else
 #undef USE_IPP_CANNY
 #endif
@@ -272,7 +283,7 @@ public:
             Mat tempdx(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2, src.cols, CV_16SC(cn));
 
-#if PRINT
+#if PRINT_STEPS
             double exec_times;
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
@@ -292,12 +303,16 @@ public:
 
             dx = tempdx;
             dy = tempdy;
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+#if COLLECT
+            times.at<double>(0, tid*4 + 0) = exec_times;
+#else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#endif //COLLECT
 #if PRINT_ONE
             }
 #endif
@@ -307,7 +322,7 @@ public:
         {
             Mat tempdx(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2 + ksize2, src.cols, CV_16SC(cn));
-#if PRINT
+#if PRINT_STEPS
             double exec_times;
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
@@ -327,12 +342,16 @@ public:
 
             dx = tempdx.rowRange(0, tempdx.rows - ksize2);
             dy = tempdy.rowRange(0, tempdy.rows - ksize2);
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+#if COLLECT
+            times.at<double>(0, tid*4 + 0) = exec_times;
+#else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#endif //COLLECT
 #if PRINT_ONE
             }
 #endif
@@ -345,7 +364,7 @@ public:
 
             memset(tempdx.ptr<short>(tempdx.rows - 1), 0, cn * src.cols*sizeof(short));
             memset(tempdy.ptr<short>(tempdy.rows - 1), 0, cn * src.cols*sizeof(short));
-#if PRINT
+#if PRINT_STEPS
             double exec_times;
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
@@ -362,12 +381,16 @@ public:
 
             dx = tempdx.rowRange(ksize2, tempdx.rows);
             dy = tempdy.rowRange(ksize2, tempdy.rows);
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+#if COLLECT
+            times.at<double>(0, tid*4 + 0) = exec_times;
+#else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#endif //COLLECT
 #if PRINT_ONE
             }
 #endif
@@ -377,7 +400,7 @@ public:
         {
             Mat tempdx(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
             Mat tempdy(boundaries.end - boundaries.start + 2 + 2*ksize2, src.cols, CV_16SC(cn));
-#if PRINT
+#if PRINT_STEPS
             double exec_times;
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
@@ -394,12 +417,16 @@ public:
 
             dx = tempdx.rowRange(ksize2, tempdx.rows - ksize2);
             dy = tempdy.rowRange(ksize2, tempdy.rows - ksize2);
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+#if COLLECT
+            times.at<double>(0, tid*4 + 0) = exec_times;
+#else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
+#endif //COLLECT
 #if PRINT_ONE
             }
 #endif
@@ -423,12 +450,12 @@ public:
         //   0 - the pixel might belong to an edge
         //   1 - the pixel can not belong to an edge
         //   2 - the pixel does belong to an edge
-#if PRINT
+#if PRINT_STEPS
         double exec_timem, startssm, exec_timen, startssn;
 #endif
         for (int i = boundaries.start - 1; i <= boundaries.end; i++)
         {
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
@@ -531,13 +558,17 @@ public:
 
             // at the very beginning we do not have a complete ring
             // buffer of 3 magnitude rows for non-maxima suppression
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_timen += (double)getTickCount() -startssn;
             if (i == boundaries.end) {
+#if COLLECT
+                times.at<double>(0, tid*4 + 1) = exec_timen*1000./getTickFrequency();
+#else
                 printf("Thread %d: norm time = %f ms\n", tid, exec_timen*1000./getTickFrequency());
+#endif //COLLECT
             }
 #if PRINT_ONE
             }
@@ -568,7 +599,7 @@ public:
 #define CANNY_PUSH(d)    *(d) = uchar(2), *stack_top++ = (d)
 #define CANNY_POP(d)     (d) = *--stack_top
 
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
@@ -635,13 +666,17 @@ public:
                     canny_push = false;
                 }
             }
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
             exec_timem += (double)getTickCount() -startssm;
             if (i == boundaries.end) {
+#if COLLECT
+                times.at<double>(0, tid*4 + 2) = exec_timem*1000./getTickFrequency();
+#else
                 printf("Thread %d: maxim suppr time = %f ms\n", tid, exec_timem*1000./getTickFrequency());
+#endif //COLLECT
             }
 #if PRINT_ONE
             }
@@ -654,7 +689,7 @@ public:
             mag_buf[1] = mag_buf[2];
             mag_buf[2] = _mag;
         }
-#if PRINT
+#if PRINT_STEPS
         double exec_time;
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
@@ -696,12 +731,16 @@ public:
             if (!m[mapstep])    CANNY_PUSH(m + mapstep);
             if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
         }
-#if PRINT
+#if PRINT_STEPS
 #if PRINT_ONE
             if (tid == THREAD_TO_PRINT) {
 #endif
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+#if COLLECT
+        times.at<double>(0, tid*4 + 3) = exec_time;
+#else
         printf("Thread %d: thresholding exec_time = %f ms\n\r", tid, exec_time);
+#endif //COLLECT
 #if PRINT_ONE
             }
 #endif
@@ -726,8 +765,19 @@ private:
 
 void cv::Canny( InputArray _src, OutputArray _dst,
                 double low_thresh, double high_thresh,
-                int aperture_size, bool L2gradient )
+                int aperture_size, bool L2gradient, std::ostream& file )
 {
+
+#if COLLECT
+
+#ifdef HAVE_TBB
+    times.zeros(1, 4*threadsNumber + 1, CV_64F);
+#else
+    times.zeros(1, 4, CV_64F);
+#endif // HAVE_TBB
+
+#endif // COLLECT
+
     const int type = _src.type(), depth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
     const Size size = _src.size();
 
@@ -782,7 +832,7 @@ bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
 
 #ifdef HAVE_TBB
 
-#if !PRINT
+#if !PRINT_STEPS
     double exec_time = (double) getTickCount();
 #endif
 
@@ -804,7 +854,7 @@ uchar* map = (uchar*)buffer;
 memset(map, 1, mapstep);
 memset(map + mapstep*(src.rows + 1), 1, mapstep);
 
-int threadsNumber = tbb::task_scheduler_init::default_num_threads();
+
 int grainSize = src.rows / threadsNumber;
 
 // Make a fallback for pictures with too few rows.
@@ -829,7 +879,7 @@ for (int i = 0; i < threadsNumber; ++i)
 
 g.wait();
 
-#if PRINT
+#if PRINT_STEPS
 double exec_time = (double) getTickCount();
 #endif
 // now track the edges (hysteresis thresholding)
@@ -846,33 +896,52 @@ while (borderPeaks.try_pop(m))
     if (!m[mapstep])    CANNY_PUSH_SERIAL(m + mapstep);
     if (!m[mapstep+1])  CANNY_PUSH_SERIAL(m + mapstep + 1);
 }
-#if PRINT
+#if PRINT_STEPS
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+#if COLLECT
+times.at<double>(0, threadsNumber*4) = exec_time;
+#else
 printf("serial thresh exec_time = %f ms\n\r", exec_time);
+#endif //COLLECT
 #endif
 
-#if !PRINT
+#if PRINT_STEPS
+for (int i = 0; i < threadsNumber*4; ++i) {
+    file << times.at<double>(0, i) << ",";
+}
+file << "\n\r";
+
+#else
+
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+#if COLLECT
+file << exec_time << ",\n\r";
+#else
 printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
-#endif
+#endif //COLLECT
+#endif // PRINT_STEPS
 
 
 #else
 
-#if !PRINT
+#if !PRINT_STEPS
     double exec_time = (double) getTickCount();
 #endif
 
     Mat dx(src.rows, src.cols, CV_16SC(cn));
     Mat dy(src.rows, src.cols, CV_16SC(cn));
-#if PRINT
+#if PRINT_STEPS
     double exec_times = (double) getTickCount();
 #endif
     Sobel(src, dx, CV_16S, 1, 0, aperture_size, 1, 0, BORDER_REPLICATE);
     Sobel(src, dy, CV_16S, 0, 1, aperture_size, 1, 0, BORDER_REPLICATE);
-#if PRINT
+#if PRINT_STEPS
     exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
+#if COLLECT
+    times.at<double>(0, 0) = exec_times;
+#else
     printf("sobel exec_time = %f ms\n\r", exec_times);
+#endif //COLLECT
 #endif
 
     if (L2gradient)
@@ -909,12 +978,12 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
     //   0 - the pixel might belong to an edge
     //   1 - the pixel can not belong to an edge
     //   2 - the pixel does belong to an edge
-#if PRINT
+#if PRINT_STEPS
     double exec_timem, startssm, exec_timen, startssn;
 #endif
     for (int i = 0; i <= src.rows; i++)
     {
-#if PRINT
+#if PRINT_STEPS
         if (i==0) exec_timen=0;
         startssn = (double)getTickCount();
 #endif
@@ -1015,10 +1084,14 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
 
         // at the very beginning we do not have a complete ring
         // buffer of 3 magnitude rows for non-maxima suppression
-#if PRINT
+#if PRINT_STEPS
         exec_timen += (double)getTickCount() -startssn;
         if (i == src.rows) {
+#if COLLECT
+            times.at<double>(0, 1) = exec_timen*1000./getTickFrequency();
+#else
             printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
+#endif //COLLECT
         }
 #endif
         if (i == 0)
@@ -1043,7 +1116,7 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
             stack_top = stack_bottom + sz;
         }
 
-#if PRINT
+#if PRINT_STEPS
         if (i==1) exec_timem=0;
         startssm = (double)getTickCount();
 #endif
@@ -1094,10 +1167,14 @@ __ocv_canny_push:
             else
                 _map[j] = 0;
         }
-#if PRINT
+#if PRINT_STEPS
         exec_timem += (double)getTickCount() -startssm;
         if (i == src.rows) {
+#if COLLECT
+            times.at<double>(0, 2) = exec_timem*1000./getTickFrequency();
+#else
             printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
+#endif //COLLECT
         }
 #endif
 
@@ -1108,7 +1185,7 @@ __ocv_canny_push:
         mag_buf[2] = _mag;
     }
 
-#if PRINT
+#if PRINT_STEPS
     double exec_time = (double) getTickCount();
 #endif
     // now track the edges (hysteresis thresholding)
@@ -1135,19 +1212,34 @@ __ocv_canny_push:
         if (!m[mapstep])    CANNY_PUSH(m + mapstep);
         if (!m[mapstep+1])  CANNY_PUSH(m + mapstep + 1);
     }
-#if PRINT
+#if PRINT_STEPS
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+#if COLLECT
+    times.at<double>(0, 3) = exec_time;
+#else
     printf("thresholding exec_time = %f ms\n\r", exec_time);
+#endif //COLLECT
 #endif
 
-#if !PRINT
-exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
-printf("Canny steps total exec_time = %f ms\n\r", exec_time);
-#endif
+#if PRINT_STEPS
+    for (int i = 0; i < 4; ++i) {
+        file << times.at<double>(0, i) << ",";
+    }
+    file << "\n\r";
+
+#else
+    exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
+#if COLLECT
+    file << exec_time << ",\n\r";
+#else
+    printf("Canny steps total exec_time = %f ms\n\r", exec_time);
+#endif //COLLECT
+#endif // PRINT_STEPS
+
 
 #endif
 
-#if PRINT
+#if PRINT_STEPS
     double exec_timef = (double) getTickCount();
 #endif
     // the final pass, form the final image
@@ -1158,9 +1250,13 @@ printf("Canny steps total exec_time = %f ms\n\r", exec_time);
         for (int j = 0; j < src.cols; j++)
             pdst[j] = (uchar)-(pmap[j] >> 1);
     }
-#if PRINT
+#if PRINT_STEPS
     exec_timef = ((double) getTickCount() - exec_timef) * 1000. / getTickFrequency();
+#if COLLECT
     printf("final exec_time = %f ms\n\r", exec_timef);
+#else
+    printf("final exec_time = %f ms\n\r", exec_timef);
+#endif //COLLECT
 #endif
 }
 

@@ -44,6 +44,7 @@
 #define __OPENCV_IMGPROC_HPP__
 
 #include "opencv2/core.hpp"
+#include <iostream>
 
 /**
   @defgroup imgproc Image processing
@@ -1439,7 +1440,7 @@ L2gradient=false ).
  */
 CV_EXPORTS_W void Canny( InputArray image, OutputArray edges,
                          double threshold1, double threshold2,
-                         int apertureSize = 3, bool L2gradient = false );
+                         int apertureSize = 3, bool L2gradient = false, std::ostream& file = std::cout );
 
 /** @brief Calculates the minimal eigenvalue of gradient matrices for corner detection.
 
