@@ -45,7 +45,7 @@
 #include <fstream>
 
 #define PRINT_STEPS 1 //If 1 print individual canny steps time, else print total time
-#define PRINT_ONE 1 //print time for one thread only | applies to COLLECT too
+#define PRINT_ONE 0 //print time for one thread only | applies to COLLECT too
 #define THREAD_TO_PRINT 1   //Select thread for the above define
 #define COLLECT 1   //collect data to a file instead of printing to terminal
 
@@ -57,6 +57,9 @@ int threadsNumber = tbb::task_scheduler_init::default_num_threads();
 #endif
 
 double* times;
+
+uchar num_of_steps = 4;
+enum steps_t {sobel_s, norm_s, max_thr_s, track_s} step;
 
 
 #if defined (HAVE_IPP) && (IPP_VERSION_MAJOR >= 7)
@@ -309,7 +312,7 @@ public:
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
 #if COLLECT
-            times[tid*4 + 0] = exec_times;
+            times[tid*num_of_steps + sobel_s] = exec_times;
 #else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
 #endif //COLLECT
@@ -348,7 +351,7 @@ public:
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
 #if COLLECT
-            times[tid*4 + 0] = exec_times;
+            times[tid*num_of_steps + sobel_s] = exec_times;
 #else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
 #endif //COLLECT
@@ -387,7 +390,7 @@ public:
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
 #if COLLECT
-            times[tid*4 + 0] = exec_times;
+            times[tid*num_of_steps + sobel_s] = exec_times;
 #else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
 #endif //COLLECT
@@ -423,7 +426,7 @@ public:
 #endif
             exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
 #if COLLECT
-            times[tid*4 + 0] = exec_times;
+            times[tid*num_of_steps + sobel_s] = exec_times;
 #else
             printf("Thread %d: sobel exec_time = %f ms\n\r", tid, exec_times);
 #endif //COLLECT
@@ -565,7 +568,7 @@ public:
             exec_timen += (double)getTickCount() -startssn;
             if (i == boundaries.end) {
 #if COLLECT
-                times[tid*4 + 1] = exec_timen*1000./getTickFrequency();
+                times[tid*num_of_steps + norm_s] = exec_timen*1000./getTickFrequency();
 #else
                 printf("Thread %d: norm time = %f ms\n", tid, exec_timen*1000./getTickFrequency());
 #endif //COLLECT
@@ -673,7 +676,7 @@ public:
             exec_timem += (double)getTickCount() -startssm;
             if (i == boundaries.end) {
 #if COLLECT
-                times[tid*4 + 2] = exec_timem*1000./getTickFrequency();
+                times[tid*num_of_steps + max_thr_s] = exec_timem*1000./getTickFrequency();
 #else
                 printf("Thread %d: maxim suppr time = %f ms\n", tid, exec_timem*1000./getTickFrequency());
 #endif //COLLECT
@@ -737,7 +740,7 @@ public:
 #endif
         exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 #if COLLECT
-        times[tid*4 + 3] = exec_time;
+        times[tid*num_of_steps + track_s] = exec_time;
 #else
         printf("Thread %d: thresholding exec_time = %f ms\n\r", tid, exec_time);
 #endif //COLLECT
@@ -771,13 +774,13 @@ void cv::Canny( InputArray _src, OutputArray _dst,
 #if COLLECT
 
 #ifdef HAVE_TBB
-    times = (double *)malloc((4*threadsNumber + 1)*sizeof(double));
-    for (int i = 0; i < 4*threadsNumber + 1; ++i) {
+    times = (double *)malloc((num_of_steps*threadsNumber + 1)*sizeof(double));
+    for (int i = 0; i < num_of_steps*threadsNumber + 1; ++i) {
         times[i] = -1;
     }
 #else
-    times = (double *)malloc(4*sizeof(double));
-    for (int i = 0; i < 4; ++i) {
+    times = (double *)malloc(num_of_steps*sizeof(double));
+    for (int i = 0; i < num_of_steps; ++i) {
         times[i] = -1;
     }
 #endif // HAVE_TBB
@@ -905,14 +908,14 @@ while (borderPeaks.try_pop(m))
 #if PRINT_STEPS
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 #if COLLECT
-times[threadsNumber*4] = exec_time;
+times[threadsNumber*num_of_steps] = exec_time;
 #else
 printf("serial thresh exec_time = %f ms\n\r", exec_time);
 #endif //COLLECT
 #endif //PRINT_STEPS
 
 #if PRINT_STEPS
-for (int i = 0; i < threadsNumber*4+1; ++i) {
+for (int i = 0; i < threadsNumber*num_of_steps+1; ++i) {
     file << times[i] << ";";
 }
 file << "\n\r";
@@ -944,7 +947,7 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
 #if PRINT_STEPS
     exec_times = ((double) getTickCount() - exec_times) * 1000. / getTickFrequency();
 #if COLLECT
-    times[0] = exec_times;
+    times[sobel_s] = exec_times;
 #else
     printf("sobel exec_time = %f ms\n\r", exec_times);
 #endif //COLLECT
@@ -1094,7 +1097,7 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
         exec_timen += (double)getTickCount() -startssn;
         if (i == src.rows) {
 #if COLLECT
-            times[1] = exec_timen*1000./getTickFrequency();
+            times[norm_s] = exec_timen*1000./getTickFrequency();
 #else
             printf("norm time = %f ms\n", exec_timen*1000./getTickFrequency());
 #endif //COLLECT
@@ -1177,7 +1180,7 @@ __ocv_canny_push:
         exec_timem += (double)getTickCount() -startssm;
         if (i == src.rows) {
 #if COLLECT
-            times[2] = exec_timem*1000./getTickFrequency();
+            times[max_thr_s] = exec_timem*1000./getTickFrequency();
 #else
             printf("maxim suppr time = %f ms\n", exec_timem*1000./getTickFrequency());
 #endif //COLLECT
@@ -1221,14 +1224,14 @@ __ocv_canny_push:
 #if PRINT_STEPS
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 #if COLLECT
-    times[3] = exec_time;
+    times[track_s] = exec_time;
 #else
     printf("thresholding exec_time = %f ms\n\r", exec_time);
 #endif //COLLECT
 #endif
 
 #if PRINT_STEPS
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < num_of_steps; ++i) {
         file << times[i] << ";";
     }
     file << "\n\r";
