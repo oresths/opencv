@@ -918,13 +918,13 @@ printf("serial thresh exec_time = %f ms\n\r", exec_time);
 for (int i = 0; i < threadsNumber*num_of_steps+1; ++i) {
     file << times[i] << ";";
 }
-file << "\n\r";
+file << "\n";
 
 #else
 
 exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 #if COLLECT
-file << exec_time << ";\n\r";
+file << exec_time << ";\n";
 #else
 printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
 #endif //COLLECT
@@ -1234,12 +1234,12 @@ __ocv_canny_push:
     for (int i = 0; i < num_of_steps; ++i) {
         file << times[i] << ";";
     }
-    file << "\n\r";
+    file << "\n";
 
 #else
     exec_time = ((double) getTickCount() - exec_time) * 1000. / getTickFrequency();
 #if COLLECT
-    file << exec_time << ";\n\r";
+    file << exec_time << ";\n";
 #else
     printf("Canny steps total exec_time = %f ms\n\r", exec_time);
 #endif //COLLECT
