@@ -49,8 +49,8 @@
 #define PRINT_ONE 0 //print time for one thread only | applies to COLLECT too
 #define THREAD_TO_PRINT 1   //Select thread for the above define
 
+#undef HAVE_TBB //uncomment this to disable tbb parallel version
 
-//#undef HAVE_TBB
 
 #ifdef HAVE_TBB
 int threadsNumber = tbb::task_scheduler_init::default_num_threads();
