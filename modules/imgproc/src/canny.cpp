@@ -45,9 +45,9 @@
 #include <fstream>
 
 #define PRINT_STEPS 1 //If 1 print individual canny steps time, else print total time
+#define COLLECT 1   //collect data to a file instead of printing to terminal
 #define PRINT_ONE 0 //print time for one thread only | applies to COLLECT too
 #define THREAD_TO_PRINT 1   //Select thread for the above define
-#define COLLECT 1   //collect data to a file instead of printing to terminal
 
 
 //#undef HAVE_TBB
@@ -1262,7 +1262,6 @@ __ocv_canny_push:
 #if PRINT_STEPS
     exec_timef = ((double) getTickCount() - exec_timef) * 1000. / getTickFrequency();
 #if COLLECT
-    printf("final exec_time = %f ms\n\r", exec_timef);
 #else
     printf("final exec_time = %f ms\n\r", exec_timef);
 #endif //COLLECT
