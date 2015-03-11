@@ -47,9 +47,9 @@
 #define PRINT_STEPS 1 //If 1 print individual canny steps time, else print total time
 #define COLLECT 1   //collect data to a file instead of printing to terminal
 #define PRINT_ONE 0 //print time for one thread only | applies to COLLECT too
-#define THREAD_TO_PRINT 1   //Select thread for the above define
+#define THREAD_TO_PRINT 0   //Select thread for the above define, first thread id = 0
 
-#undef HAVE_TBB //uncomment this to disable tbb parallel version
+//#undef HAVE_TBB //uncomment this to disable tbb parallel version
 
 
 #ifdef HAVE_TBB
@@ -915,10 +915,13 @@ printf("serial thresh exec_time = %f ms\n\r", exec_time);
 #endif //PRINT_STEPS
 
 #if PRINT_STEPS
+
+#if COLLECT
 for (int i = 0; i < threadsNumber*num_of_steps+1; ++i) {
     file << times[i] << ";";
 }
 file << "\n";
+#endif //COLLECT
 
 #else
 
