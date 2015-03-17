@@ -41,6 +41,7 @@
 
 #include "precomp.hpp"
 #include "opencl_kernels_imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include <iostream>
 #include <fstream>
 
@@ -49,7 +50,7 @@
 #define PRINT_ONE 0 //print time for one thread only | applies to COLLECT too
 #define THREAD_TO_PRINT 0   //Select thread for the above define, first thread id = 0
 
-//#undef HAVE_TBB //uncomment this to disable tbb parallel version
+#undef HAVE_TBB //uncomment this to disable tbb parallel version
 
 
 #ifdef HAVE_TBB
@@ -976,6 +977,9 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
     mag_buf[2] = mag_buf[1] + mapstep*cn;
     memset(mag_buf[0], 0, /* cn* */mapstep*sizeof(int));
 
+    int * temp;
+    temp = (int *)malloc(src.rows * src.cols * sizeof(int));
+
     uchar* map = (uchar*)(mag_buf[2] + mapstep*cn);
     memset(map, 1, mapstep);
     memset(map + mapstep*(src.rows + 1), 1, mapstep);
@@ -1026,7 +1030,7 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
                         _mm_storeu_si128((__m128i *)(_norm + j + 4), v_norm);
                     }
                 }
-#elif CV_NEON
+#elif CV_NEONa
                 for ( ; j <= width - 8; j += 8)
                 {
                     int16x8_t v_dx = vld1q_s16(_dx + j), v_dy = vld1q_s16(_dy + j);
@@ -1034,10 +1038,14 @@ printf("Canny steps par total exec_time = %f ms\n\r", exec_time);
                                                    vabsq_s32(vmovl_s16(vget_low_s16(v_dy)))));
                     vst1q_s32(_norm + j + 4, vaddq_s32(vabsq_s32(vmovl_s16(vget_high_s16(v_dx))),
                                                        vabsq_s32(vmovl_s16(vget_high_s16(v_dy)))));
+                    vst1q_s32(temp+i*width + j + 4, vaddq_s32(vabsq_s32(vmovl_s16(vget_high_s16(v_dx))),
+                                                       vabsq_s32(vmovl_s16(vget_high_s16(v_dy)))));
                 }
 #endif
-                for ( ; j < width; ++j)
+                for ( ; j < width; ++j){
                     _norm[j] = std::abs(int(_dx[j])) + std::abs(int(_dy[j]));
+                    temp[i*width + j] = std::abs(int(_dx[j])) + std::abs(int(_dy[j]));
+                }
             }
             else
             {
@@ -1254,6 +1262,15 @@ __ocv_canny_push:
 #if PRINT_STEPS
     double exec_timef = (double) getTickCount();
 #endif
+    Mat temp_img(src.rows, src.cols, CV_32SC1, temp);
+    double minVal, maxVal;
+    minMaxLoc(temp_img, &minVal, &maxVal); //find minimum and maximum intensities
+
+    Mat draw;
+    temp_img.convertTo(draw, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+
+    imwrite("/home/odroid/Pictures/dok.jpg", draw);
+
     // the final pass, form the final image
     const uchar* pmap = map + mapstep + 1;
     uchar* pdst = dst.ptr();
